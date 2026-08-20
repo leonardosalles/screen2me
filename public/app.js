@@ -112,6 +112,7 @@ const translations = {
     waitingHost: "Aguardando apresentador.",
     viewerConnected: "Alguem entrou na sala.",
     hostSharedBy: "{name} compartilhou a tela.",
+    watchingUserScreen: "Voce esta assistindo a tela de {name}.",
     hostLeft: "O apresentador saiu.",
     trialEnded: "Seu tempo anonimo acabou. Crie uma conta para continuar.",
     connectionLost: "Conexao caiu. Recarregue a pagina.",
@@ -217,6 +218,7 @@ const translations = {
     waitingHost: "Waiting for presenter.",
     viewerConnected: "Someone joined the room.",
     hostSharedBy: "{name} shared the screen.",
+    watchingUserScreen: "You are watching {name}'s screen.",
     hostLeft: "The presenter left.",
     trialEnded: "Your anonymous time is up. Create an account to continue.",
     connectionLost: "Connection dropped. Reload the page.",
@@ -329,6 +331,7 @@ const peers = new Map();
 const pendingCandidates = new Map();
 
 applyLanguage(language);
+applyRouteState();
 registerServiceWorker();
 setupCurrentRoute();
 loadSession().then(() => {
@@ -444,10 +447,9 @@ async function connect() {
     if (message.type === "viewer-joined") {
       hostDisplayName = message.host?.displayName || null;
       if (message.hostOnline && hostDisplayName) {
-        setStatus(format("hostSharedBy", { name: hostDisplayName }));
-        setStageSubtitle(format("hostSharedBy", { name: hostDisplayName }));
+        setViewerWatchingCopy(hostDisplayName);
       } else {
-        setStatusKey(message.hostOnline ? "connectingHost" : "waitingHost");
+        setViewerWatchingCopy(roomId ? `@${roomId}` : null, message.hostOnline ? "connectingHost" : "waitingHost");
       }
       roomLabel.textContent = message.roomId;
       updateAudience(message.audience || []);
@@ -472,8 +474,7 @@ async function connect() {
     if (message.type === "host-ready") {
       hostId = message.hostId;
       hostDisplayName = message.host?.displayName || null;
-      setStatus(hostDisplayName ? format("hostSharedBy", { name: hostDisplayName }) : t("connectingHost"));
-      setStageSubtitle(hostDisplayName ? format("hostSharedBy", { name: hostDisplayName }) : "");
+      setViewerWatchingCopy(hostDisplayName || (roomId ? `@${roomId}` : null), "connectingHost");
       setMode("watchingMode");
       setStage("stageReceived");
       setBadge("remote");
@@ -526,6 +527,49 @@ async function connect() {
   socket.addEventListener("close", () => {
     setStatusKey("connectionLost");
   });
+}
+
+function applyRouteState() {
+  const currentParams = new URLSearchParams(window.location.search);
+  roomId = currentParams.get("roomId") || currentParams.get("room") || getUserRoomFromPath();
+  role = roomId || location.pathname === "/watch" ? "viewer" : "idle";
+
+  if (role === "viewer") {
+    shareButton.classList.add("hidden");
+    stopButton.classList.add("hidden");
+    linkBox.classList.add("hidden");
+    liveDot.classList.remove("on");
+    clearTrial();
+    setMode("watchingMode");
+    setStage("stageReceived");
+    setBadge("remote");
+    setEmptyTitle("emptyViewerTitle");
+    setEmptyHint(roomId ? "emptyWaiting" : "emptyNoHost");
+    setViewerWatchingCopy(roomId ? `@${roomId}` : null, "enteringRoom");
+    roomLabel.textContent = roomId || t("noRoom");
+    updateViewerCount(0);
+    return;
+  }
+
+  shareButton.classList.remove("hidden");
+  stopButton.classList.add("hidden");
+  setMode("standby");
+  setStage("stageIdle");
+  setBadge("local");
+  setEmptyTitle("emptyTitle");
+  setEmptyHint("emptyIdle");
+  setStatusKey("ready");
+}
+
+function setViewerWatchingCopy(name, fallbackKey = "enteringRoom") {
+  if (!name) {
+    setStatusKey(fallbackKey);
+    setStageSubtitle("");
+    return;
+  }
+  const message = format("watchingUserScreen", { name });
+  setStatus(message);
+  setStageSubtitle(message);
 }
 
 async function startSharing() {
@@ -1051,7 +1095,11 @@ function applyLanguage(nextLanguage) {
   copyButton.title = t("copyLink");
 
   if (!roomId) roomLabel.textContent = t("noRoom");
-  setStatus(t(statusKey));
+  if (role === "viewer" && roomId) {
+    setViewerWatchingCopy(hostDisplayName || `@${roomId}`, statusKey);
+  } else {
+    setStatus(t(statusKey));
+  }
   setMode(modeKey);
   setStage(stageKey);
   setBadge(badgeKey);
@@ -1301,6 +1349,7 @@ function getUserRoomFromPath() {
 }
 
 function setupCurrentRoute() {
+  applyRouteState();
   if (location.pathname === "/account") {
     openAuthModal(params.get("mode") === "login" ? "login" : "register", false);
     return;
