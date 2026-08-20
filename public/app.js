@@ -93,6 +93,7 @@ const profileUsernameInput = document.querySelector("#profileUsernameInput");
 const appNav = document.querySelector(".app-nav");
 
 const params = new URLSearchParams(window.location.search);
+const debugEnabled = params.get("debug") === "true";
 const translations = {
   pt: {
     pageDescription: "screen2.me cria uma sala rapida para compartilhar sua tela por link.",
@@ -329,6 +330,7 @@ let authMode = "register";
 let authReturnPath = "/";
 let iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
 let frameWatchInterval = null;
+let debugStatsInterval = null;
 const peers = new Map();
 const pendingCandidates = new Map();
 
@@ -337,6 +339,14 @@ applyRouteState();
 registerServiceWorker();
 setupCurrentRoute();
 Promise.all([loadSession(), loadRuntimeConfig()]).then(() => {
+  debugLog("boot", {
+    href: location.href,
+    role,
+    roomId,
+    userAgent: navigator.userAgent,
+    secureContext: window.isSecureContext,
+    iceServers
+  });
   trackEvent("page_view", { role, legacyRoomParam: Boolean(params.get("room")) });
   connect();
 });
@@ -369,6 +379,14 @@ document.addEventListener("fullscreenchange", updateFullscreenButton);
 document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
 video.addEventListener("webkitbeginfullscreen", updateFullscreenButton);
 video.addEventListener("webkitendfullscreen", updateFullscreenButton);
+for (const eventName of ["loadstart", "loadedmetadata", "canplay", "playing", "waiting", "stalled", "suspend", "pause", "error", "emptied"]) {
+  video.addEventListener(eventName, () => {
+    debugLog(`video:event:${eventName}`, {
+      ...videoSnapshot(),
+      error: video.error ? { code: video.error.code, message: video.error.message } : null
+    });
+  });
+}
 window.addEventListener("beforeunload", () => {
   if (socket?.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: "leave-room" }));
@@ -390,9 +408,11 @@ async function connect() {
   if (socket && [WebSocket.CONNECTING, WebSocket.OPEN].includes(socket.readyState)) return;
 
   setStatusKey("connectingServer");
+  debugLog("socket:connecting", { url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}` });
   socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`);
 
   socket.addEventListener("open", () => {
+    debugLog("socket:open", { role, roomId });
     setStatusKey(role === "viewer" ? "enteringRoom" : "readyToShare");
     if (role === "viewer") {
       if (!roomId) {
@@ -417,6 +437,7 @@ async function connect() {
 
   socket.addEventListener("message", async (event) => {
     const message = JSON.parse(event.data);
+    debugLog("socket:message", summarizeSignalMessage(message));
 
     if (message.type === "profile") {
       if (message.user) {
@@ -527,6 +548,7 @@ async function connect() {
   });
 
   socket.addEventListener("close", () => {
+    debugLog("socket:close", { role, roomId });
     setStatusKey("connectionLost");
   });
 }
@@ -701,7 +723,9 @@ async function callViewer(viewerId) {
   localStream.getTracks().forEach((track) => peer.addTrack(track, localStream));
   preferVp8(peer);
   const offer = await peer.createOffer();
+  debugLog("webrtc:offer-created", { viewerId, sdp: summarizeSdp(offer.sdp) });
   await peer.setLocalDescription(preferVp8InDescription(offer));
+  debugLog("webrtc:offer-local-description", { viewerId, sdp: summarizeSdp(peer.localDescription?.sdp) });
   sendSignal(viewerId, peer.localDescription);
 }
 
@@ -711,16 +735,20 @@ async function handleSignal(from, signal) {
   if (signal.type === "offer") {
     hostId = from;
     await peer.setRemoteDescription(signal);
+    debugLog("webrtc:offer-remote-description", { from, sdp: summarizeSdp(signal.sdp) });
     await flushPendingCandidates(from, peer);
     preferVp8(peer);
     const answer = await peer.createAnswer();
+    debugLog("webrtc:answer-created", { from, sdp: summarizeSdp(answer.sdp) });
     await peer.setLocalDescription(preferVp8InDescription(answer));
+    debugLog("webrtc:answer-local-description", { from, sdp: summarizeSdp(peer.localDescription?.sdp) });
     sendSignal(from, peer.localDescription);
     return;
   }
 
   if (signal.type === "answer") {
     await peer.setRemoteDescription(signal);
+    debugLog("webrtc:answer-remote-description", { from, sdp: summarizeSdp(signal.sdp) });
     await flushPendingCandidates(from, peer);
     return;
   }
@@ -730,21 +758,29 @@ async function handleSignal(from, signal) {
       queueCandidate(from, signal);
       return;
     }
+    debugLog("webrtc:candidate-add", { from, candidate: summarizeCandidate(signal.candidate) });
     await peer.addIceCandidate(signal);
   }
 }
 
 function createPeer(peerId) {
   const peer = new RTCPeerConnection({ iceServers });
+  debugLog("peer:create", { peerId, iceServers });
 
   peers.set(peerId, peer);
 
   peer.addEventListener("icecandidate", (event) => {
+    debugLog("peer:icecandidate", { peerId, candidate: summarizeCandidate(event.candidate) });
     if (event.candidate) sendSignal(peerId, event.candidate);
   });
 
   peer.addEventListener("track", (event) => {
     const stream = event.streams[0] || new MediaStream([event.track]);
+    debugLog("peer:track", {
+      peerId,
+      track: summarizeTrack(event.track),
+      streams: event.streams.length
+    });
     showRemoteStream(stream, event.track, peer);
     setMode("live");
     liveDot.classList.add("on");
@@ -753,6 +789,12 @@ function createPeer(peerId) {
   });
 
   peer.addEventListener("connectionstatechange", () => {
+    debugLog("peer:connectionstate", {
+      peerId,
+      connectionState: peer.connectionState,
+      iceConnectionState: peer.iceConnectionState,
+      signalingState: peer.signalingState
+    });
     if (peer.connectionState === "connecting" && role === "viewer") {
       setEmptyHint("emptyConnectingVideo");
     }
@@ -766,10 +808,19 @@ function createPeer(peerId) {
   });
 
   peer.addEventListener("iceconnectionstatechange", () => {
+    debugLog("peer:icestate", { peerId, iceConnectionState: peer.iceConnectionState });
     trackEvent("ice_state", { state: peer.iceConnectionState });
     if (peer.iceConnectionState === "failed") {
       peer.restartIce?.();
     }
+  });
+
+  peer.addEventListener("icegatheringstatechange", () => {
+    debugLog("peer:gatheringstate", { peerId, iceGatheringState: peer.iceGatheringState });
+  });
+
+  peer.addEventListener("signalingstatechange", () => {
+    debugLog("peer:signalingstate", { peerId, signalingState: peer.signalingState });
   });
 
   return peer;
@@ -819,6 +870,10 @@ function preferCodec(sdp, kind, codecName) {
 }
 
 async function showRemoteStream(stream, track, peer) {
+  debugLog("video:stream-attach", {
+    streamTracks: stream.getTracks().map(summarizeTrack),
+    track: summarizeTrack(track)
+  });
   video.srcObject = stream;
   video.muted = true;
   video.autoplay = true;
@@ -837,13 +892,16 @@ async function showRemoteStream(stream, track, peer) {
   await playRemoteVideo();
 
   waitForVideoFrame(peer);
+  startDebugStats(peer);
 }
 
 async function playRemoteVideo() {
   try {
     await video.play();
+    debugLog("video:play-ok", videoSnapshot());
   } catch (error) {
     console.error("Remote video play failed", error);
+    debugLog("video:play-failed", { name: error.name, message: error.message, ...videoSnapshot() });
     window.setTimeout(() => video.play().catch(() => {}), 350);
   }
 }
@@ -858,6 +916,7 @@ function waitForVideoFrame(peer) {
       video.classList.add("is-playing");
       emptyState.classList.add("hidden");
       setStatusKey("watching");
+      debugLog("video:playing-detected", videoSnapshot());
       trackEvent("video_playing", { width: video.videoWidth, height: video.videoHeight });
       return true;
     }
@@ -883,6 +942,7 @@ function waitForVideoFrame(peer) {
       setStatusKey("watching");
       setEmptyHint("emptyNoFrames");
       const stats = await remoteVideoStats(peer);
+      debugLog("video:no-frames", { ...videoSnapshot(), stats });
       trackEvent("video_no_frames", {
         readyState: video.readyState,
         networkState: video.networkState,
@@ -900,17 +960,52 @@ function stopFrameWatch() {
   frameWatchInterval = null;
 }
 
+function startDebugStats(peer) {
+  if (!debugEnabled) return;
+  if (debugStatsInterval) window.clearInterval(debugStatsInterval);
+  debugStatsInterval = window.setInterval(async () => {
+    debugLog("stats:remote-video", {
+      video: videoSnapshot(),
+      stats: await remoteVideoStats(peer),
+      candidates: await selectedCandidatePair(peer)
+    });
+  }, 3000);
+}
+
+function stopDebugStats() {
+  if (!debugStatsInterval) return;
+  window.clearInterval(debugStatsInterval);
+  debugStatsInterval = null;
+}
+
 async function remoteVideoStats(peer) {
   if (!peer?.getStats) return {};
   try {
     const report = await peer.getStats();
+    let codecById = {};
+    for (const item of report.values()) {
+      if (item.type === "codec") {
+        codecById[item.id] = {
+          mimeType: item.mimeType,
+          clockRate: item.clockRate,
+          sdpFmtpLine: item.sdpFmtpLine
+        };
+      }
+    }
     for (const item of report.values()) {
       if (item.type === "inbound-rtp" && item.kind === "video") {
         return {
           bytesReceived: item.bytesReceived || 0,
+          packetsReceived: item.packetsReceived || 0,
           framesDecoded: item.framesDecoded || 0,
           framesReceived: item.framesReceived || 0,
-          packetsLost: item.packetsLost || 0
+          framesDropped: item.framesDropped || 0,
+          keyFramesDecoded: item.keyFramesDecoded || 0,
+          frameWidth: item.frameWidth || 0,
+          frameHeight: item.frameHeight || 0,
+          jitter: item.jitter || 0,
+          packetsLost: item.packetsLost || 0,
+          codec: codecById[item.codecId] || null
         };
       }
     }
@@ -920,7 +1015,119 @@ async function remoteVideoStats(peer) {
   return {};
 }
 
+async function selectedCandidatePair(peer) {
+  if (!peer?.getStats) return {};
+  try {
+    const report = await peer.getStats();
+    let selectedPair = null;
+    for (const item of report.values()) {
+      if (item.type === "transport" && item.selectedCandidatePairId) {
+        selectedPair = report.get(item.selectedCandidatePairId);
+      }
+      if (item.type === "candidate-pair" && item.selected) {
+        selectedPair = item;
+      }
+    }
+    if (!selectedPair) return {};
+    const local = report.get(selectedPair.localCandidateId);
+    const remote = report.get(selectedPair.remoteCandidateId);
+    return {
+      state: selectedPair.state,
+      nominated: selectedPair.nominated,
+      currentRoundTripTime: selectedPair.currentRoundTripTime,
+      availableOutgoingBitrate: selectedPair.availableOutgoingBitrate,
+      local: summarizeStatsCandidate(local),
+      remote: summarizeStatsCandidate(remote)
+    };
+  } catch {
+    return {};
+  }
+}
+
+function summarizeStatsCandidate(candidate) {
+  if (!candidate) return null;
+  return {
+    type: candidate.candidateType,
+    protocol: candidate.protocol,
+    address: candidate.address || candidate.ip,
+    port: candidate.port,
+    networkType: candidate.networkType,
+    relayProtocol: candidate.relayProtocol
+  };
+}
+
+function videoSnapshot() {
+  const quality = typeof video.getVideoPlaybackQuality === "function" ? video.getVideoPlaybackQuality() : null;
+  return {
+    readyState: video.readyState,
+    networkState: video.networkState,
+    paused: video.paused,
+    muted: video.muted,
+    currentTime: Number(video.currentTime.toFixed(2)),
+    width: video.videoWidth,
+    height: video.videoHeight,
+    totalVideoFrames: quality?.totalVideoFrames || 0,
+    droppedVideoFrames: quality?.droppedVideoFrames || 0,
+    corruptedVideoFrames: quality?.corruptedVideoFrames || 0
+  };
+}
+
+function summarizeTrack(track) {
+  if (!track) return null;
+  return {
+    id: track.id,
+    kind: track.kind,
+    label: track.label,
+    enabled: track.enabled,
+    muted: track.muted,
+    readyState: track.readyState,
+    settings: track.getSettings?.()
+  };
+}
+
+function summarizeCandidate(candidate) {
+  if (!candidate) return null;
+  const raw = typeof candidate === "string" ? candidate : candidate.candidate;
+  if (!raw) return null;
+  const type = raw.match(/ typ ([a-z]+)/)?.[1] || null;
+  const protocol = raw.match(/ udp | tcp /i)?.[0]?.trim().toLowerCase() || null;
+  const address = raw.match(/candidate:\S+ \d+ \S+ \d+ ([^\s]+) (\d+)/);
+  return {
+    type,
+    protocol,
+    address: address?.[1] || null,
+    port: address?.[2] || null
+  };
+}
+
+function summarizeSdp(sdp = "") {
+  return {
+    codecs: [...sdp.matchAll(/^a=rtpmap:\d+ ([^/\r\n]+)/gim)].map((match) => match[1]),
+    iceUfrag: sdp.match(/^a=ice-ufrag:(.+)$/im)?.[1] || null,
+    fingerprint: Boolean(sdp.match(/^a=fingerprint:/im)),
+    hasVideo: /^m=video /im.test(sdp)
+  };
+}
+
+function summarizeSignalMessage(message) {
+  if (message.type !== "signal") return message;
+  return {
+    type: message.type,
+    from: message.from,
+    to: message.to,
+    signalType: message.signal?.type || (message.signal?.candidate ? "candidate" : "unknown"),
+    candidate: summarizeCandidate(message.signal?.candidate),
+    sdp: summarizeSdp(message.signal?.sdp)
+  };
+}
+
+function debugLog(label, data = {}) {
+  if (!debugEnabled) return;
+  console.log(`[screen2.me debug] ${label}`, data);
+}
+
 function sendSignal(to, signal) {
+  debugLog("signal:send", summarizeSignalMessage({ type: "signal", to, signal }));
   socket.send(JSON.stringify({ type: "signal", to, signal }));
 }
 
@@ -932,6 +1139,7 @@ function closePeer(peerId) {
 
 function cleanupPeers() {
   stopFrameWatch();
+  stopDebugStats();
   for (const peerId of peers.keys()) {
     closePeer(peerId);
   }
