@@ -94,6 +94,7 @@ const appNav = document.querySelector(".app-nav");
 
 const params = new URLSearchParams(window.location.search);
 const debugEnabled = params.get("debug") === "true";
+const requestedVideoTopCrop = Number(params.get("cropTop"));
 const STREAM_VIDEO_WIDTH = 2560;
 const STREAM_VIDEO_HEIGHT = 1440;
 const STREAM_FRAME_RATE = 60;
@@ -347,6 +348,7 @@ const pendingCandidates = new Map();
 
 applyLanguage(language);
 applyRouteState();
+applyVideoTopCrop();
 registerServiceWorker();
 setupCurrentRoute();
 Promise.all([loadSession(), loadRuntimeConfig()]).then(() => {
@@ -1287,6 +1289,13 @@ function updateScreenAspectRatio() {
 
 function resetScreenAspectRatio() {
   screenFrame.style.removeProperty("--screen-aspect-ratio");
+}
+
+function applyVideoTopCrop() {
+  if (!Number.isFinite(requestedVideoTopCrop)) return;
+  const crop = Math.max(0, Math.min(160, Math.round(requestedVideoTopCrop)));
+  document.documentElement.style.setProperty("--video-top-crop", `${crop}px`);
+  debugLog("video:top-crop", { crop });
 }
 
 function summarizeTrack(track) {

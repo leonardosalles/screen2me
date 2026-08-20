@@ -645,6 +645,7 @@ video {
 
 video.is-playing {
   height: calc(100% + var(--video-top-crop));
+  object-fit: fill;
   transform: translateY(calc(-1 * var(--video-top-crop)));
   opacity: 1;
 }
