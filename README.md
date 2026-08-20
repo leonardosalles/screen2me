@@ -32,6 +32,24 @@ npm start
 
 O servidor usa `PORT` da Railway e escuta em `0.0.0.0` por padrao.
 
+### TURN para Windows/redes restritas
+
+Em producao, configure um TURN server. Sem TURN, WebRTC depende de conexao direta entre os navegadores; isso pode virar tela preta ou stream sem frames em algumas redes, mesmo no Chrome/Edge.
+
+Variaveis aceitas:
+
+```bash
+TURN_URL=turn:your-turn-host:3478
+TURN_USERNAME=username
+TURN_CREDENTIAL=password
+```
+
+Ou um JSON completo:
+
+```bash
+PUBLIC_ICE_SERVERS='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:your-turn-host:3478","username":"username","credential":"password"}]'
+```
+
 ## Local com Postgres
 
 ```bash

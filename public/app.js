@@ -327,6 +327,8 @@ let trialInterval = null;
 let audience = [];
 let authMode = "register";
 let authReturnPath = "/";
+let iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
+let frameWatchInterval = null;
 const peers = new Map();
 const pendingCandidates = new Map();
 
@@ -334,7 +336,7 @@ applyLanguage(language);
 applyRouteState();
 registerServiceWorker();
 setupCurrentRoute();
-loadSession().then(() => {
+Promise.all([loadSession(), loadRuntimeConfig()]).then(() => {
   trackEvent("page_view", { role, legacyRoomParam: Boolean(params.get("room")) });
   connect();
 });
@@ -673,6 +675,7 @@ function stopSharing() {
   }
   localStream = null;
   cleanupPeers();
+  stopFrameWatch();
   video.srcObject = null;
   video.classList.remove("is-playing");
   emptyState.classList.remove("hidden");
@@ -732,9 +735,7 @@ async function handleSignal(from, signal) {
 }
 
 function createPeer(peerId) {
-  const peer = new RTCPeerConnection({
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-  });
+  const peer = new RTCPeerConnection({ iceServers });
 
   peers.set(peerId, peer);
 
@@ -743,7 +744,8 @@ function createPeer(peerId) {
   });
 
   peer.addEventListener("track", (event) => {
-    showRemoteStream(event.streams[0]);
+    const stream = event.streams[0] || new MediaStream([event.track]);
+    showRemoteStream(stream, event.track, peer);
     setMode("live");
     liveDot.classList.add("on");
     setBadge("live");
@@ -754,8 +756,19 @@ function createPeer(peerId) {
     if (peer.connectionState === "connecting" && role === "viewer") {
       setEmptyHint("emptyConnectingVideo");
     }
-    if (["closed", "failed", "disconnected"].includes(peer.connectionState)) {
+    if (peer.connectionState === "connected" && role === "viewer") {
+      playRemoteVideo();
+      waitForVideoFrame(peer);
+    }
+    if (["closed", "failed"].includes(peer.connectionState)) {
       closePeer(peerId);
+    }
+  });
+
+  peer.addEventListener("iceconnectionstatechange", () => {
+    trackEvent("ice_state", { state: peer.iceConnectionState });
+    if (peer.iceConnectionState === "failed") {
+      peer.restartIce?.();
     }
   });
 
@@ -805,7 +818,7 @@ function preferCodec(sdp, kind, codecName) {
   return lines.join("\r\n");
 }
 
-async function showRemoteStream(stream) {
+async function showRemoteStream(stream, track, peer) {
   video.srcObject = stream;
   video.muted = true;
   video.autoplay = true;
@@ -816,10 +829,14 @@ async function showRemoteStream(stream) {
   setEmptyHint("emptyConnectingVideo");
 
   video.onloadedmetadata = () => playRemoteVideo();
-  video.onresize = () => waitForVideoFrame();
+  video.onresize = () => waitForVideoFrame(peer);
+  track?.addEventListener("unmute", () => {
+    playRemoteVideo();
+    waitForVideoFrame(peer);
+  });
   await playRemoteVideo();
 
-  waitForVideoFrame();
+  waitForVideoFrame(peer);
 }
 
 async function playRemoteVideo() {
@@ -831,11 +848,13 @@ async function playRemoteVideo() {
   }
 }
 
-function waitForVideoFrame() {
+function waitForVideoFrame(peer) {
+  stopFrameWatch();
   const startedAt = Date.now();
 
   function markPlaying() {
-    if (video.videoWidth > 0 && video.videoHeight > 0) {
+    const quality = typeof video.getVideoPlaybackQuality === "function" ? video.getVideoPlaybackQuality() : null;
+    if ((video.videoWidth > 0 && video.videoHeight > 0) || (quality?.totalVideoFrames || 0) > 0) {
       video.classList.add("is-playing");
       emptyState.classList.add("hidden");
       setStatusKey("watching");
@@ -851,23 +870,54 @@ function waitForVideoFrame() {
     video.requestVideoFrameCallback(() => markPlaying());
   }
 
-  const interval = window.setInterval(() => {
+  frameWatchInterval = window.setInterval(async () => {
     if (markPlaying()) {
-      window.clearInterval(interval);
+      window.clearInterval(frameWatchInterval);
+      frameWatchInterval = null;
       return;
     }
 
     if (Date.now() - startedAt > 7000) {
-      window.clearInterval(interval);
+      window.clearInterval(frameWatchInterval);
+      frameWatchInterval = null;
       setStatusKey("watching");
       setEmptyHint("emptyNoFrames");
+      const stats = await remoteVideoStats(peer);
       trackEvent("video_no_frames", {
         readyState: video.readyState,
         networkState: video.networkState,
-        peerCount: peers.size
+        peerCount: peers.size,
+        ...stats
       });
+      playRemoteVideo();
     }
   }, 250);
+}
+
+function stopFrameWatch() {
+  if (!frameWatchInterval) return;
+  window.clearInterval(frameWatchInterval);
+  frameWatchInterval = null;
+}
+
+async function remoteVideoStats(peer) {
+  if (!peer?.getStats) return {};
+  try {
+    const report = await peer.getStats();
+    for (const item of report.values()) {
+      if (item.type === "inbound-rtp" && item.kind === "video") {
+        return {
+          bytesReceived: item.bytesReceived || 0,
+          framesDecoded: item.framesDecoded || 0,
+          framesReceived: item.framesReceived || 0,
+          packetsLost: item.packetsLost || 0
+        };
+      }
+    }
+  } catch {
+    return {};
+  }
+  return {};
 }
 
 function sendSignal(to, signal) {
@@ -881,6 +931,7 @@ function closePeer(peerId) {
 }
 
 function cleanupPeers() {
+  stopFrameWatch();
   for (const peerId of peers.keys()) {
     closePeer(peerId);
   }
@@ -1209,6 +1260,19 @@ function setPseudoFullscreen(enabled) {
 function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }
+}
+
+async function loadRuntimeConfig() {
+  try {
+    const response = await fetch("/api/config", { credentials: "same-origin" });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (Array.isArray(data.iceServers) && data.iceServers.length > 0) {
+      iceServers = data.iceServers;
+    }
+  } catch {
+    // Keep the default STUN-only config when runtime config is unavailable.
   }
 }
 

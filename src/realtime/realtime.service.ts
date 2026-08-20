@@ -212,6 +212,7 @@ export class RealtimeService implements OnModuleDestroy {
     if (socket.role === "host" && room.host === socket) {
       room.host = null;
       for (const viewer of room.viewers) {
+        this.pauseUsage(viewer);
         this.send(viewer, { type: "host-left" });
       }
     }
@@ -290,6 +291,15 @@ export class RealtimeService implements OnModuleDestroy {
       limitSeconds: ANONYMOUS_LIMIT_SECONDS,
       endsAt: socket.trialEndsAt
     };
+  }
+
+  private pauseUsage(socket: Client) {
+    this.endUsage(socket);
+    if (socket.trialTimer) {
+      clearTimeout(socket.trialTimer);
+      socket.trialTimer = null;
+    }
+    socket.trialEndsAt = null;
   }
 
   private async ensureViewerUsage(socket: Client, roomId: string) {
