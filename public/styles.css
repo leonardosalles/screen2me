@@ -633,7 +633,7 @@ body.pseudo-fullscreen-open #fullscreenButton {
   flex: 1 1 auto;
   width: 100%;
   aspect-ratio: var(--screen-aspect-ratio, 16 / 9);
-  max-height: 100%;
+  max-height: min(100%, 750px);
   min-height: 0;
   overflow: hidden;
   border: 1px solid #3b4658;
