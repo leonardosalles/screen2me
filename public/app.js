@@ -1306,13 +1306,13 @@ function updateVideoCropTransform() {
   const crop = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--video-top-crop")) || 0;
   const frameHeight = screenFrame.clientHeight || 0;
   if (!fullscreenActive || !crop || frameHeight <= crop) {
-    screenFrame.style.setProperty("--video-crop-scale", "1");
+    screenFrame.style.setProperty("--video-crop-height", "100%");
     screenFrame.style.setProperty("--video-crop-shift", "0px");
     return;
   }
 
   const scale = frameHeight / (frameHeight - crop);
-  screenFrame.style.setProperty("--video-crop-scale", String(scale));
+  screenFrame.style.setProperty("--video-crop-height", `${frameHeight * scale}px`);
   screenFrame.style.setProperty("--video-crop-shift", `${-crop * scale}px`);
 }
 
@@ -1653,25 +1653,6 @@ function handleFullscreenChange() {
 }
 
 async function enterFullscreenMode() {
-  const request =
-    screenFrame.requestFullscreen ||
-    screenFrame.webkitRequestFullscreen ||
-    screenFrame.webkitRequestFullScreen ||
-    screenFrame.msRequestFullscreen;
-
-  if (request) {
-    await request.call(screenFrame);
-    updateFullscreenButton();
-    return;
-  }
-
-  const videoFullscreen = video.webkitEnterFullscreen || video.webkitEnterFullScreen;
-  if (videoFullscreen && video.srcObject && video.classList.contains("is-playing")) {
-    videoFullscreen.call(video);
-    updateFullscreenButton();
-    return;
-  }
-
   setPseudoFullscreen(true);
 }
 
@@ -1713,6 +1694,7 @@ function setPseudoFullscreen(enabled) {
   screenFrame.classList.toggle("is-pseudo-fullscreen", enabled);
   document.body.classList.toggle("pseudo-fullscreen-open", enabled);
   handleFullscreenChange();
+  requestAnimationFrame(updateVideoCropTransform);
 }
 
 function registerServiceWorker() {

@@ -15,7 +15,7 @@
   --danger: #ff5d6c;
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
   --video-top-crop: 80px;
-  --video-crop-scale: 1;
+  --video-crop-height: 100%;
   --video-crop-shift: 0px;
 }
 
@@ -651,7 +651,9 @@ video.is-playing {
 
 .screen-frame:fullscreen video.is-playing,
 .screen-frame.is-pseudo-fullscreen video.is-playing {
-  height: calc(100% * var(--video-crop-scale));
+  align-self: start;
+  justify-self: stretch;
+  height: var(--video-crop-height);
   object-fit: fill;
   transform: translateY(var(--video-crop-shift));
 }
