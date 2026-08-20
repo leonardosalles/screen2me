@@ -508,6 +508,8 @@ input {
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  height: calc(100vh - 72px);
+  min-height: 620px;
   padding: 26px;
 }
 
@@ -558,6 +560,15 @@ input {
 }
 
 .screen-frame:fullscreen {
+  box-sizing: border-box;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  padding:
+    env(safe-area-inset-top)
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
   border: 0;
   border-radius: 0;
   background: #050607;
@@ -576,8 +587,15 @@ input {
   inset: 0;
   z-index: 100;
   width: 100vw;
+  height: 100vh;
+  height: 100svh;
   height: 100dvh;
-  min-height: 100dvh;
+  min-height: 0;
+  padding:
+    env(safe-area-inset-top)
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
   border: 0;
   border-radius: 0;
   background: #050607;
@@ -604,8 +622,11 @@ body.pseudo-fullscreen-open #fullscreenButton {
   position: relative;
   display: grid;
   place-items: center;
-  flex: 1;
-  min-height: 420px;
+  flex: 0 0 auto;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: calc(100% - 58px);
+  min-height: 0;
   overflow: hidden;
   border: 1px solid #3b4658;
   border-radius: 8px;
@@ -1013,12 +1034,15 @@ video.is-playing {
   }
 
   .stage {
+    height: auto;
     min-height: 56vh;
     padding: 18px;
   }
 
   .screen-frame {
-    min-height: 360px;
+    aspect-ratio: 16 / 10;
+    max-height: none;
+    min-height: 300px;
   }
 }
 
