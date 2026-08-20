@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(uuid()) @db.Uuid
+  sessionId    String        @unique @map("session_id")
+  username     String?       @unique
+  name         String?
+  email        String?       @unique
+  passwordHash String?       @map("password_hash")
+  language     String?
+  firstSeenAt  DateTime      @default(now()) @map("first_seen_at")
+  lastSeenAt   DateTime      @updatedAt @map("last_seen_at")
+  events       UserEvent[]
+  streamUsages StreamUsage[]
+
+  @@map("users")
+}
+
+model StreamUsage {
+  id              BigInt    @id @default(autoincrement())
+  userId          String?   @map("user_id") @db.Uuid
+  sessionId       String    @map("session_id")
+  roomId          String    @map("room_id")
+  role            String
+  startedAt       DateTime  @default(now()) @map("started_at")
+  endedAt         DateTime? @map("ended_at")
+  durationSeconds Int       @default(0) @map("duration_seconds")
+  limitSeconds    Int?      @map("limit_seconds")
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([roomId])
+  @@index([startedAt])
+  @@map("stream_usages")
+}
+
+model UserEvent {
+  id        BigInt   @id @default(autoincrement())
+  userId    String?  @map("user_id") @db.Uuid
+  sessionId String   @map("session_id")
+  eventName String   @map("event_name")
+  roomId    String?  @map("room_id")
+  path      String?
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([eventName])
+  @@index([createdAt])
+  @@map("user_events")
+}

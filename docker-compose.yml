@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: screen2me-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: screen2me
+      POSTGRES_USER: screen2me
+      POSTGRES_PASSWORD: screen2me
+    ports:
+      - "5432:5432"
+    volumes:
+      - screen2me-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U screen2me -d screen2me"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    container_name: screen2me-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://screen2me:screen2me@postgres:5432/screen2me
+      HOST: 0.0.0.0
+      PORT: 3000
+      PGSSLMODE: disable
+    ports:
+      - "3000:3000"
+    command: sh -c "npx prisma db push && node dist/main.js"
+
+volumes:
+  screen2me-postgres:

@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#10131a" />
+    <meta
+      name="description"
+      content="screen2.me creates a fast room to share your screen by link."
+    />
+    <title>screen2.me</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-KS5RYKNQB8"></script>
+    <script
+      async
+      src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4345944288770781"
+      crossorigin="anonymous"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-KS5RYKNQB8");
+    </script>
+  </head>
+  <body>
+    <header class="app-nav">
+      <a class="nav-brand" href="/">
+        <div class="mark" aria-hidden="true">
+          <span></span>
+        </div>
+        <div>
+          <strong>screen2.me</strong>
+          <span id="status">Ready.</span>
+        </div>
+      </a>
+
+      <div class="nav-actions">
+        <label class="language-select" aria-label="Language">
+          <span id="languageFlag" aria-hidden="true">🇺🇸</span>
+          <select id="languageSelect">
+            <option value="en">English</option>
+            <option value="pt">Português</option>
+          </select>
+        </label>
+
+        <button id="accountButton" class="nav-account" type="button">
+          <span id="accountLabel">Session</span>
+          <strong id="accountName">Guest</strong>
+        </button>
+      </div>
+    </header>
+
+    <main class="shell">
+      <aside class="control">
+        <section id="quickCard" class="quick-card" aria-label="Broadcast controls">
+          <div class="live-row">
+            <span id="liveDot" class="live-dot"></span>
+            <span id="modeLabel">Standby</span>
+          </div>
+
+          <button id="shareButton" class="primary action-button" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="13" rx="2"></rect>
+              <path d="M8 21h8"></path>
+              <path d="M12 17v4"></path>
+            </svg>
+            <span>Share</span>
+          </button>
+
+          <button id="stopButton" class="danger action-button hidden" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+            </svg>
+            <span>Stop</span>
+          </button>
+        </section>
+
+        <section id="accountCta" class="account-cta" aria-label="Account benefits">
+          <span id="accountCtaEyebrow">Free account</span>
+          <strong id="accountCtaTitle">Share without losing context</strong>
+          <p id="accountCtaText">Save room history, reserve an @username, and reuse links. The app stays free.</p>
+        </section>
+
+        <section id="trialPanel" class="trial-panel hidden" aria-label="Trial limit">
+          <div>
+            <span id="trialLabel">Anonymous access</span>
+            <strong id="trialCountdown">15:00</strong>
+          </div>
+          <p id="trialText">Without an account, streaming and watching are limited to 15 minutes. Create a free account to continue.</p>
+          <a id="trialAccountLink" class="small-link" href="/account">Create account</a>
+        </section>
+
+        <section id="linkBox" class="link-box hidden" aria-label="Room link">
+          <div class="section-heading">
+            <span id="linkLabel">Link</span>
+            <button id="copyButton" class="ghost-button" type="button" aria-label="Copy link" title="Copy link">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="link-row">
+            <input id="shareLink" readonly />
+          </div>
+        </section>
+
+        <section id="statsBox" class="stats" aria-label="Room status">
+          <div>
+            <span id="roomStatLabel">Room</span>
+            <strong id="roomLabel">none</strong>
+          </div>
+          <div>
+            <span id="viewerStatLabel">Audience</span>
+            <strong id="viewerCount">0</strong>
+          </div>
+        </section>
+
+        <section id="audiencePanel" class="audience-panel hidden" aria-label="Audience list">
+          <span id="watchingNowLabel">Watching now</span>
+          <p id="audienceList">No signed-in viewers yet.</p>
+        </section>
+
+        <footer class="footnote">
+          <span id="madeByNote">Made with ♥️ by <a href="https://leonardosalles.com" target="_blank" rel="noreferrer">Leonardo Salles</a></span>
+        </footer>
+      </aside>
+
+      <section class="stage" aria-label="Stream preview">
+        <div class="topbar">
+          <div>
+            <span id="stageTitle">Your screen appears here</span>
+            <small id="stageSubtitle"></small>
+          </div>
+          <div class="stage-actions">
+            <span id="connectionBadge">local</span>
+            <button id="fullscreenButton" class="ghost-button" type="button" aria-label="Fullscreen" title="Fullscreen">
+              <svg class="enter-fullscreen" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
+                <path d="M16 3h3a2 2 0 0 1 2 2v3"></path>
+                <path d="M8 21H5a2 2 0 0 1-2-2v-3"></path>
+                <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
+              </svg>
+              <svg class="exit-fullscreen hidden" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 3v3a2 2 0 0 1-2 2H3"></path>
+                <path d="M16 3v3a2 2 0 0 0 2 2h3"></path>
+                <path d="M8 21v-3a2 2 0 0 0-2-2H3"></path>
+                <path d="M16 21v-3a2 2 0 0 1 2-2h3"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="screen-frame">
+          <video id="video" autoplay playsinline muted></video>
+          <div id="emptyState" class="empty-state">
+            <div class="empty-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <rect x="3" y="5" width="18" height="12" rx="2"></rect>
+                <path d="M9 21h6"></path>
+                <path d="M12 17v4"></path>
+              </svg>
+            </div>
+            <strong id="emptyTitle">One click and the link is ready</strong>
+            <span id="emptyHint">Choose a screen, window, or tab to start.</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="howToModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="howToTitle">
+      <section class="modal">
+        <button id="closeHowToButton" class="modal-close" type="button" aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+
+        <div class="modal-eyebrow" id="howToEyebrow">Quick start</div>
+        <h2 id="howToTitle">Share your screen in seconds</h2>
+        <p id="howToIntro">screen2.me is built for quick rooms: start sharing, send the link, and keep the presenter tab open.</p>
+
+        <div class="steps">
+          <div>
+            <span>1</span>
+            <strong id="stepOneTitle">Start a room</strong>
+            <p id="stepOneText">Click Share and choose a screen, window, or tab.</p>
+          </div>
+          <div>
+            <span>2</span>
+            <strong id="stepTwoTitle">Send the link</strong>
+            <p id="stepTwoText">Copy the watch link and send it to your group.</p>
+          </div>
+          <div>
+            <span>3</span>
+            <strong id="stepThreeTitle">Stay live</strong>
+            <p id="stepThreeText">Keep this tab open while people are watching.</p>
+          </div>
+        </div>
+
+        <div class="account-benefits">
+          <div>
+            <strong id="benefitHistoryTitle">Room history</strong>
+            <p id="benefitHistoryText">Find past rooms and sessions without digging through chats.</p>
+          </div>
+          <div>
+            <strong id="benefitUsernameTitle">Fixed share link</strong>
+            <p id="benefitUsernameText">Reserve a username for a personal link like screen2.me/leonardo.</p>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button id="skipHowToButton" class="text-button" type="button">Skip</button>
+          <a id="createAccountLink" class="primary modal-primary link-button" href="/account">Create account</a>
+        </div>
+      </section>
+    </div>
+
+    <div id="authView" class="auth-view modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <section class="auth-panel">
+        <button id="closeAuthButton" class="modal-close" type="button" aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+
+        <a class="auth-brand" href="/">
+          <span class="auth-mark" aria-hidden="true"></span>
+          <strong>screen2.me</strong>
+        </a>
+
+        <div>
+          <div class="modal-eyebrow" id="authEyebrow">Account</div>
+          <h2 id="authTitle">Reserve your fixed sharing link</h2>
+          <p id="authIntro">Create an account to keep room history and claim a username link like screen2.me/leonardo.</p>
+        </div>
+
+        <div class="auth-tabs" role="tablist">
+          <button id="registerTab" class="active" type="button">Register</button>
+          <button id="loginTab" type="button">Login</button>
+        </div>
+
+        <form id="registerForm" class="identity-form">
+          <div class="form-grid">
+            <label>
+              <span id="registerNameLabel">Name</span>
+              <input id="registerNameInput" autocomplete="name" placeholder="Leonardo" />
+            </label>
+            <label>
+              <span id="usernameLabel">Username</span>
+              <input id="usernameInput" autocomplete="username" placeholder="@leonardo" required />
+              <small id="usernameHint">Use letters, numbers, or underscores. Ex: @alex</small>
+            </label>
+          </div>
+          <label>
+            <span id="registerEmailLabel">Email</span>
+            <input id="registerEmailInput" autocomplete="email" type="email" placeholder="you@company.com" required />
+          </label>
+          <label>
+            <span id="registerPasswordLabel">Password</span>
+            <input id="registerPasswordInput" autocomplete="new-password" type="password" minlength="10" required />
+          </label>
+          <button id="registerButton" class="primary modal-primary" type="submit">Create account</button>
+        </form>
+
+        <form id="loginForm" class="identity-form hidden">
+          <label>
+            <span id="loginEmailLabel">Email</span>
+            <input id="loginEmailInput" autocomplete="email" type="email" required />
+          </label>
+          <label>
+            <span id="loginPasswordLabel">Password</span>
+            <input id="loginPasswordInput" autocomplete="current-password" type="password" required />
+          </label>
+          <button id="loginButton" class="primary modal-primary" type="submit">Login</button>
+        </form>
+
+        <p id="authMessage" class="auth-message" role="status"></p>
+      </section>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
