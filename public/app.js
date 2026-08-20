@@ -342,6 +342,8 @@ let relaySourceBuffer = null;
 let relayObjectUrl = null;
 let relayAppendQueue = [];
 const relayTargets = new Set();
+const RELAY_TIMESLICE_MS = 250;
+const RELAY_VIDEO_BITRATE = 3500000;
 const peers = new Map();
 const pendingCandidates = new Map();
 
@@ -1053,7 +1055,7 @@ function startRelayBroadcast(viewerId) {
   relaySequence = 0;
   relayRecorder = new MediaRecorder(localStream, {
     mimeType: relayMimeType,
-    videoBitsPerSecond: 1200000
+    videoBitsPerSecond: RELAY_VIDEO_BITRATE
   });
 
   relayRecorder.addEventListener("dataavailable", async (event) => {
@@ -1075,8 +1077,12 @@ function startRelayBroadcast(viewerId) {
     relayRecorder = null;
   });
 
-  relayRecorder.start(1000);
-  debugLog("relay:recorder-start", { relayMimeType });
+  relayRecorder.start(RELAY_TIMESLICE_MS);
+  debugLog("relay:recorder-start", {
+    relayMimeType,
+    timesliceMs: RELAY_TIMESLICE_MS,
+    videoBitsPerSecond: RELAY_VIDEO_BITRATE
+  });
   trackEvent("relay_started", { mode: "host" });
 }
 
@@ -1126,6 +1132,10 @@ function startRelayPlayback(mimeType) {
 function appendRelayChunk(chunk) {
   if (!chunk) return;
   const bytes = base64ToBytes(chunk);
+  if (relayAppendQueue.length > 8) {
+    relayAppendQueue = relayAppendQueue.slice(-3);
+    debugLog("relay:queue-trimmed", { queue: relayAppendQueue.length });
+  }
   relayAppendQueue.push(bytes);
   debugLog("relay:chunk-received", { bytes: bytes.byteLength, queue: relayAppendQueue.length });
   flushRelayQueue();
