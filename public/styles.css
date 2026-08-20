@@ -23,9 +23,15 @@
   box-sizing: border-box;
 }
 
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
   background:
     radial-gradient(circle at 20% 0%, rgba(53, 225, 154, 0.16), transparent 32rem),
     linear-gradient(140deg, #10131a 0%, #171321 48%, #10131a 100%);
@@ -55,7 +61,10 @@ a {
 .shell {
   display: grid;
   grid-template-columns: minmax(300px, 360px) 1fr;
-  min-height: calc(100vh - 72px);
+  height: calc(100vh - 72px);
+  height: calc(100dvh - 72px);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .app-nav {
@@ -141,6 +150,8 @@ a {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  min-height: 0;
+  overflow: auto;
   padding: 26px;
   background: rgba(23, 27, 36, 0.92);
   border-right: 1px solid var(--line);
@@ -511,8 +522,8 @@ input {
   flex-direction: column;
   gap: 16px;
   min-width: 0;
-  height: calc(100vh - 72px);
-  min-height: 620px;
+  min-height: 0;
+  overflow: hidden;
   padding: 26px;
 }
 
@@ -619,10 +630,10 @@ body.pseudo-fullscreen-open #fullscreenButton {
   position: relative;
   display: grid;
   place-items: center;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   width: 100%;
   aspect-ratio: var(--screen-aspect-ratio, 16 / 9);
-  max-height: calc(100% - 58px);
+  max-height: 100%;
   min-height: 0;
   overflow: hidden;
   border: 1px solid #3b4658;
@@ -651,11 +662,9 @@ video.is-playing {
 
 .screen-frame:fullscreen video.is-playing,
 .screen-frame.is-pseudo-fullscreen video.is-playing {
-  align-self: start;
-  justify-self: stretch;
-  height: var(--video-crop-height);
-  object-fit: fill;
-  transform: translateY(var(--video-crop-shift));
+  height: 100%;
+  object-fit: contain;
+  transform: none;
 }
 
 .screen-frame:has(video.is-playing) {
@@ -1036,25 +1045,27 @@ video.is-playing {
 
   .shell {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-    min-height: auto;
+    grid-template-rows: minmax(0, auto) minmax(0, 1fr);
+    height: auto;
+    min-height: calc(100dvh - 122px);
+    overflow: auto;
   }
 
   .control {
+    max-height: 42vh;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
 
   .stage {
-    height: auto;
-    min-height: 56vh;
+    min-height: 0;
     padding: 18px;
   }
 
   .screen-frame {
     aspect-ratio: var(--screen-aspect-ratio, 16 / 10);
     max-height: none;
-    min-height: 300px;
+    min-height: 0;
   }
 }
 

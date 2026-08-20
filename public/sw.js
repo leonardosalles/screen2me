@@ -1,4 +1,4 @@
-const CACHE_NAME = "screen2-me-v43";
+const CACHE_NAME = "screen2-me-v44";
 const ASSETS = ["/", "/styles.css", "/app.js", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {

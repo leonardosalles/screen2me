@@ -1302,18 +1302,8 @@ function applyVideoTopCrop() {
 }
 
 function updateVideoCropTransform() {
-  const fullscreenActive = isFullscreen();
-  const crop = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--video-top-crop")) || 0;
-  const frameHeight = screenFrame.clientHeight || 0;
-  if (!fullscreenActive || !crop || frameHeight <= crop) {
-    screenFrame.style.setProperty("--video-crop-height", "100%");
-    screenFrame.style.setProperty("--video-crop-shift", "0px");
-    return;
-  }
-
-  const scale = frameHeight / (frameHeight - crop);
-  screenFrame.style.setProperty("--video-crop-height", `${frameHeight * scale}px`);
-  screenFrame.style.setProperty("--video-crop-shift", `${-crop * scale}px`);
+  screenFrame.style.setProperty("--video-crop-height", "100%");
+  screenFrame.style.setProperty("--video-crop-shift", "0px");
 }
 
 function summarizeTrack(track) {
