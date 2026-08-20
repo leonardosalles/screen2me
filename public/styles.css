@@ -14,6 +14,7 @@
   --warn: #ffd166;
   --danger: #ff5d6c;
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  --video-top-crop: 80px;
 }
 
 * {
@@ -568,6 +569,7 @@ input {
   border: 0;
   border-radius: 0;
   background: #050607;
+  box-shadow: none;
 }
 
 .screen-frame:fullscreen video {
@@ -591,6 +593,7 @@ input {
   border: 0;
   border-radius: 0;
   background: #050607;
+  box-shadow: none;
 }
 
 .screen-frame.is-pseudo-fullscreen video {
@@ -631,6 +634,7 @@ body.pseudo-fullscreen-open #fullscreenButton {
 }
 
 video {
+  grid-area: 1 / 1;
   display: block;
   width: 100%;
   height: 100%;
@@ -640,7 +644,13 @@ video {
 }
 
 video.is-playing {
+  height: calc(100% + var(--video-top-crop));
+  transform: translateY(calc(-1 * var(--video-top-crop)));
   opacity: 1;
+}
+
+.screen-frame:has(video.is-playing) {
+  background: #050607;
 }
 
 .empty-state {

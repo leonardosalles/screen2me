@@ -94,10 +94,12 @@ const appNav = document.querySelector(".app-nav");
 
 const params = new URLSearchParams(window.location.search);
 const debugEnabled = params.get("debug") === "true";
-const STREAM_VIDEO_WIDTH = 1920;
-const STREAM_VIDEO_HEIGHT = 1080;
+const STREAM_VIDEO_WIDTH = 2560;
+const STREAM_VIDEO_HEIGHT = 1440;
 const STREAM_FRAME_RATE = 60;
-const STREAM_MAX_BITRATE = 6000000;
+const STREAM_MIN_BITRATE = 2500000;
+const STREAM_START_BITRATE = 8000000;
+const STREAM_MAX_BITRATE = 16000000;
 const translations = {
   pt: {
     pageDescription: "screen2.me cria uma sala rapida para compartilhar sua tela por link.",
@@ -787,10 +789,9 @@ async function callViewer(viewerId) {
     const sender = peer.addTrack(track, localStream);
     await tuneVideoSender(sender);
   }
-  preferVp8(peer);
   const offer = await peer.createOffer();
   debugLog("webrtc:offer-created", { viewerId, sdp: summarizeSdp(offer.sdp) });
-  await peer.setLocalDescription(preferVp8InDescription(offer));
+  await peer.setLocalDescription(enhanceVideoDescription(offer));
   debugLog("webrtc:offer-local-description", { viewerId, sdp: summarizeSdp(peer.localDescription?.sdp) });
   sendSignal(viewerId, peer.localDescription);
 }
@@ -803,10 +804,9 @@ async function handleSignal(from, signal) {
     await peer.setRemoteDescription(signal);
     debugLog("webrtc:offer-remote-description", { from, sdp: summarizeSdp(signal.sdp) });
     await flushPendingCandidates(from, peer);
-    preferVp8(peer);
     const answer = await peer.createAnswer();
     debugLog("webrtc:answer-created", { from, sdp: summarizeSdp(answer.sdp) });
-    await peer.setLocalDescription(preferVp8InDescription(answer));
+    await peer.setLocalDescription(enhanceVideoDescription(answer));
     debugLog("webrtc:answer-local-description", { from, sdp: summarizeSdp(peer.localDescription?.sdp) });
     sendSignal(from, peer.localDescription);
     return;
@@ -920,6 +920,7 @@ async function tuneVideoSender(sender) {
     maxFramerate: STREAM_FRAME_RATE,
     scaleResolutionDownBy: 1
   };
+  parameters.degradationPreference = "maintain-resolution";
   try {
     await sender.setParameters(parameters);
     debugLog("webrtc:sender-tuned", parameters.encodings[0]);
@@ -928,12 +929,49 @@ async function tuneVideoSender(sender) {
   }
 }
 
-function preferVp8InDescription(description) {
+function enhanceVideoDescription(description) {
   if (!description?.sdp) return description;
   return {
     type: description.type,
-    sdp: preferCodec(description.sdp, "video", "VP8")
+    sdp: setVideoBitrate(description.sdp)
   };
+}
+
+function setVideoBitrate(sdp) {
+  const lines = sdp.split("\r\n");
+  const videoLineIndex = lines.findIndex((line) => line.startsWith("m=video"));
+  if (videoLineIndex === -1) return sdp;
+
+  const nextMediaLineIndex = lines.findIndex((line, index) => index > videoLineIndex && line.startsWith("m="));
+  const videoEndIndex = nextMediaLineIndex === -1 ? lines.length : nextMediaLineIndex;
+  const bitrateAs = Math.floor(STREAM_MAX_BITRATE / 1000);
+  const bitrateLineIndex = lines.findIndex((line, index) => index > videoLineIndex && index < videoEndIndex && line.startsWith("b=AS:"));
+
+  if (bitrateLineIndex === -1) {
+    const connectionLineIndex = lines.findIndex((line, index) => index > videoLineIndex && index < videoEndIndex && line.startsWith("c="));
+    lines.splice(connectionLineIndex === -1 ? videoLineIndex + 1 : connectionLineIndex + 1, 0, `b=AS:${bitrateAs}`);
+  } else {
+    lines[bitrateLineIndex] = `b=AS:${bitrateAs}`;
+  }
+
+  const payloads = lines
+    .slice(videoLineIndex + 1, videoEndIndex)
+    .map((line) => line.match(/^a=rtpmap:(\d+) ([^/\r\n]+)/i))
+    .filter((match) => match && !["rtx", "red", "ulpfec", "flexfec-03"].includes(match[2].toLowerCase()))
+    .map((match) => match[1]);
+  for (const payload of payloads) {
+    const fmtpIndex = lines.findIndex((line, index) => index > videoLineIndex && index < videoEndIndex && line.startsWith(`a=fmtp:${payload} `));
+    const bitrateParams = `x-google-min-bitrate=${Math.floor(STREAM_MIN_BITRATE / 1000)};x-google-start-bitrate=${Math.floor(STREAM_START_BITRATE / 1000)};x-google-max-bitrate=${bitrateAs}`;
+    if (fmtpIndex === -1) {
+      const rtpmapIndex = lines.findIndex((line, index) => index > videoLineIndex && index < videoEndIndex && line.startsWith(`a=rtpmap:${payload} `));
+      if (rtpmapIndex !== -1) lines.splice(rtpmapIndex + 1, 0, `a=fmtp:${payload} ${bitrateParams}`);
+      continue;
+    }
+    if (lines[fmtpIndex].includes("x-google-max-bitrate")) continue;
+    lines[fmtpIndex] = `${lines[fmtpIndex]};${bitrateParams}`;
+  }
+
+  return lines.join("\r\n");
 }
 
 function preferCodec(sdp, kind, codecName) {
