@@ -388,11 +388,12 @@ registerForm?.addEventListener("submit", registerAccount);
 loginForm?.addEventListener("submit", loginAccount);
 profileForm?.addEventListener("submit", updateProfile);
 logoutButton?.addEventListener("click", logoutAccount);
-document.addEventListener("fullscreenchange", updateFullscreenButton);
-document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
+document.addEventListener("fullscreenchange", handleFullscreenChange);
+document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
 document.addEventListener("visibilitychange", handleVisibilityChange);
-video.addEventListener("webkitbeginfullscreen", updateFullscreenButton);
-video.addEventListener("webkitendfullscreen", updateFullscreenButton);
+window.addEventListener("resize", updateVideoCropTransform);
+video.addEventListener("webkitbeginfullscreen", handleFullscreenChange);
+video.addEventListener("webkitendfullscreen", handleFullscreenChange);
 for (const eventName of ["loadstart", "loadedmetadata", "canplay", "playing", "waiting", "stalled", "suspend", "pause", "error", "emptied"]) {
   video.addEventListener(eventName, () => {
     debugLog(`video:event:${eventName}`, {
@@ -1051,6 +1052,7 @@ function waitForVideoFrame(peer) {
     if (hasRealSize || hasDecodedFrames) {
       video.classList.add("is-playing");
       updateScreenAspectRatio();
+      updateVideoCropTransform();
       emptyState.classList.add("hidden");
       setStatusKey("watching");
       debugLog("video:playing-detected", videoSnapshot());
@@ -1295,7 +1297,23 @@ function applyVideoTopCrop() {
   if (!Number.isFinite(requestedVideoTopCrop)) return;
   const crop = Math.max(0, Math.min(160, Math.round(requestedVideoTopCrop)));
   document.documentElement.style.setProperty("--video-top-crop", `${crop}px`);
+  updateVideoCropTransform();
   debugLog("video:top-crop", { crop });
+}
+
+function updateVideoCropTransform() {
+  const fullscreenActive = isFullscreen();
+  const crop = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--video-top-crop")) || 0;
+  const frameHeight = screenFrame.clientHeight || 0;
+  if (!fullscreenActive || !crop || frameHeight <= crop) {
+    screenFrame.style.setProperty("--video-crop-scale", "1");
+    screenFrame.style.setProperty("--video-crop-shift", "0px");
+    return;
+  }
+
+  const scale = frameHeight / (frameHeight - crop);
+  screenFrame.style.setProperty("--video-crop-scale", String(scale));
+  screenFrame.style.setProperty("--video-crop-shift", `${-crop * scale}px`);
 }
 
 function summarizeTrack(track) {
@@ -1629,6 +1647,11 @@ function updateFullscreenButton() {
   fullscreenButton.querySelector(".exit-fullscreen").classList.toggle("hidden", !fullscreenActive);
 }
 
+function handleFullscreenChange() {
+  updateFullscreenButton();
+  updateVideoCropTransform();
+}
+
 async function enterFullscreenMode() {
   const request =
     screenFrame.requestFullscreen ||
@@ -1689,7 +1712,7 @@ function isPseudoFullscreen() {
 function setPseudoFullscreen(enabled) {
   screenFrame.classList.toggle("is-pseudo-fullscreen", enabled);
   document.body.classList.toggle("pseudo-fullscreen-open", enabled);
-  updateFullscreenButton();
+  handleFullscreenChange();
 }
 
 function registerServiceWorker() {
