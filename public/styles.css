@@ -564,11 +564,7 @@ input {
   width: 100vw;
   height: 100vh;
   height: 100dvh;
-  padding:
-    env(safe-area-inset-top)
-    env(safe-area-inset-right)
-    env(safe-area-inset-bottom)
-    env(safe-area-inset-left);
+  padding: 0;
   border: 0;
   border-radius: 0;
   background: #050607;
@@ -591,11 +587,7 @@ input {
   height: 100svh;
   height: 100dvh;
   min-height: 0;
-  padding:
-    env(safe-area-inset-top)
-    env(safe-area-inset-right)
-    env(safe-area-inset-bottom)
-    env(safe-area-inset-left);
+  padding: 0;
   border: 0;
   border-radius: 0;
   background: #050607;
@@ -624,7 +616,7 @@ body.pseudo-fullscreen-open #fullscreenButton {
   place-items: center;
   flex: 0 0 auto;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: var(--screen-aspect-ratio, 16 / 9);
   max-height: calc(100% - 58px);
   min-height: 0;
   overflow: hidden;
@@ -639,6 +631,7 @@ body.pseudo-fullscreen-open #fullscreenButton {
 }
 
 video {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -1040,7 +1033,7 @@ video.is-playing {
   }
 
   .screen-frame {
-    aspect-ratio: 16 / 10;
+    aspect-ratio: var(--screen-aspect-ratio, 16 / 10);
     max-height: none;
     min-height: 300px;
   }

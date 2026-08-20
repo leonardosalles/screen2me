@@ -109,8 +109,9 @@ const translations = {
     screenUnsupported: "Este navegador nao permite compartilhar tela aqui.",
     permissionDenied: "Permissao negada. No macOS, confira Screen Recording para o Chrome.",
     enteringRoom: "Entrando na sala...",
-    chooseScreen: "Escolha a tela ou janela para compartilhar.",
+    chooseScreen: "Escolha Tela inteira ou uma janela. Evite compartilhar esta aba, porque o navegador pode pausar a captura ao trocar de aba.",
     sharing: "Transmitindo tela.",
+    sharingPaused: "A captura parece pausada. Volte para a tela/janela compartilhada ou escolha Tela inteira para evitar pausas do navegador.",
     shareCancelled: "Compartilhamento cancelado.",
     cannotStart: "Nao foi possivel iniciar.",
     connectingHost: "Conectando ao apresentador...",
@@ -157,7 +158,7 @@ const translations = {
     stagePaused: "Transmissao pausada",
     emptyTitle: "Um clique e o link esta pronto",
     emptyIdle: "Escolha uma tela, janela ou aba para comecar.",
-    emptyHostLive: "Sua tela esta sendo enviada. O preview local fica oculto para evitar o efeito infinito.",
+    emptyHostLive: "Sua tela esta sendo enviada. O preview local fica oculto para evitar o efeito infinito. Para mais estabilidade, compartilhe Tela inteira ou uma janela, nao esta aba.",
     emptyViewerTitle: "Aguardando",
     emptyWaiting: "Aguardando o apresentador iniciar.",
     emptyNoHost: "Nao tem ninguem transmitindo nessa sala agora. A aba do apresentador precisa continuar aberta.",
@@ -216,8 +217,9 @@ const translations = {
     screenUnsupported: "This browser cannot share the screen from here.",
     permissionDenied: "Permission denied. On macOS, check Screen Recording for Chrome.",
     enteringRoom: "Joining room...",
-    chooseScreen: "Choose a screen or window to share.",
+    chooseScreen: "Choose Entire Screen or a window. Avoid sharing this tab, because the browser can pause capture when you switch tabs.",
     sharing: "Sharing screen.",
+    sharingPaused: "Capture looks paused. Go back to the shared screen/window or choose Entire Screen to avoid browser pauses.",
     shareCancelled: "Screen sharing cancelled.",
     cannotStart: "Could not start sharing.",
     connectingHost: "Connecting to presenter...",
@@ -264,7 +266,7 @@ const translations = {
     stagePaused: "Stream paused",
     emptyTitle: "One click and the link is ready",
     emptyIdle: "Choose a screen, window, or tab to start.",
-    emptyHostLive: "Your screen is being sent. Local preview stays hidden to avoid the infinite mirror.",
+    emptyHostLive: "Your screen is being sent. Local preview stays hidden to avoid the infinite mirror. For better stability, share Entire Screen or a window, not this tab.",
     emptyViewerTitle: "Waiting",
     emptyWaiting: "Waiting for the presenter to start.",
     emptyNoHost: "Nobody is presenting in this room right now. The presenter tab must stay open.",
@@ -384,6 +386,7 @@ profileForm?.addEventListener("submit", updateProfile);
 logoutButton?.addEventListener("click", logoutAccount);
 document.addEventListener("fullscreenchange", updateFullscreenButton);
 document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
+document.addEventListener("visibilitychange", handleVisibilityChange);
 video.addEventListener("webkitbeginfullscreen", updateFullscreenButton);
 video.addEventListener("webkitendfullscreen", updateFullscreenButton);
 for (const eventName of ["loadstart", "loadedmetadata", "canplay", "playing", "waiting", "stalled", "suspend", "pause", "error", "emptied"]) {
@@ -520,6 +523,7 @@ async function connect() {
       video.srcObject = null;
       video.removeAttribute("src");
       video.classList.remove("is-playing");
+      resetScreenAspectRatio();
       emptyState.classList.remove("hidden");
       setMode("waiting");
       setStage("stagePaused");
@@ -635,7 +639,11 @@ async function startSharing() {
         frameRate: { ideal: STREAM_FRAME_RATE, max: STREAM_FRAME_RATE },
         displaySurface: "monitor"
       },
-      audio: false
+      audio: false,
+      selfBrowserSurface: "exclude",
+      surfaceSwitching: "include",
+      preferCurrentTab: false,
+      monitorTypeSurfaces: "include"
     });
     for (const track of localStream.getVideoTracks()) {
       track.contentHint = "detail";
@@ -644,12 +652,14 @@ async function startSharing() {
         height: { ideal: STREAM_VIDEO_HEIGHT },
         frameRate: { ideal: STREAM_FRAME_RATE }
       }).catch(() => {});
+      attachCaptureTrackEvents(track);
       debugLog("share:track-settings", summarizeTrack(track));
     }
     trackEvent("share_permission_granted");
 
     video.srcObject = null;
     video.classList.remove("is-playing");
+    resetScreenAspectRatio();
     emptyState.classList.remove("hidden");
     setEmptyTitle("live");
     setEmptyHint("emptyHostLive");
@@ -667,6 +677,37 @@ async function startSharing() {
     }
     console.error("Screen share failed", error);
     trackEvent("share_failed", { name: error.name, message: error.message });
+  }
+}
+
+function attachCaptureTrackEvents(track) {
+  track.addEventListener("mute", () => {
+    debugLog("share:track-muted", summarizeTrack(track));
+    if (!localStream) return;
+    setStatusKey("sharingPaused");
+    setStageSubtitle(t("sharingPaused"));
+    trackEvent("share_track_muted");
+  });
+
+  track.addEventListener("unmute", () => {
+    debugLog("share:track-unmuted", summarizeTrack(track));
+    if (!localStream) return;
+    setStatusKey("sharing");
+    setStageSubtitle(currentUser ? "" : t("trialText"));
+    trackEvent("share_track_unmuted");
+  });
+
+  track.addEventListener("ended", () => {
+    debugLog("share:track-ended", summarizeTrack(track));
+    trackEvent("share_track_ended");
+  });
+}
+
+function handleVisibilityChange() {
+  if (!localStream || role !== "host") return;
+  debugLog("page:visibility", { state: document.visibilityState });
+  if (document.visibilityState === "hidden") {
+    setStageSubtitle(t("emptyHostLive"));
   }
 }
 
@@ -721,6 +762,7 @@ function stopSharing() {
   stopFrameWatch();
   video.srcObject = null;
   video.classList.remove("is-playing");
+  resetScreenAspectRatio();
   emptyState.classList.remove("hidden");
   shareButton.disabled = false;
   shareButton.querySelector("span").textContent = t("share");
@@ -929,8 +971,14 @@ async function showRemoteStream(stream, track, peer) {
   setEmptyTitle("emptyViewerTitle");
   setEmptyHint("emptyConnectingVideo");
 
-  video.onloadedmetadata = () => playRemoteVideo();
-  video.onresize = () => waitForVideoFrame(peer);
+  video.onloadedmetadata = () => {
+    updateScreenAspectRatio();
+    playRemoteVideo();
+  };
+  video.onresize = () => {
+    updateScreenAspectRatio();
+    waitForVideoFrame(peer);
+  };
   track?.addEventListener("unmute", () => {
     playRemoteVideo();
     waitForVideoFrame(peer);
@@ -962,6 +1010,7 @@ function waitForVideoFrame(peer) {
     const hasDecodedFrames = (quality?.totalVideoFrames || 0) > 0;
     if (hasRealSize || hasDecodedFrames) {
       video.classList.add("is-playing");
+      updateScreenAspectRatio();
       emptyState.classList.add("hidden");
       setStatusKey("watching");
       debugLog("video:playing-detected", videoSnapshot());
@@ -1193,6 +1242,15 @@ function videoSnapshot() {
   };
 }
 
+function updateScreenAspectRatio() {
+  if (!video.videoWidth || !video.videoHeight) return;
+  screenFrame.style.setProperty("--screen-aspect-ratio", `${video.videoWidth} / ${video.videoHeight}`);
+}
+
+function resetScreenAspectRatio() {
+  screenFrame.style.removeProperty("--screen-aspect-ratio");
+}
+
 function summarizeTrack(track) {
   if (!track) return null;
   return {
@@ -1356,6 +1414,7 @@ function handleTrialEnded() {
     cleanupPeers();
     video.srcObject = null;
     video.classList.remove("is-playing");
+    resetScreenAspectRatio();
     emptyState.classList.remove("hidden");
   }
   setStatusKey("trialEnded");
