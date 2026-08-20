@@ -108,6 +108,26 @@ export class RealtimeService implements OnModuleDestroy {
         this.send(socket, { type: "peer-missing", peerId: message.to });
       }
     }
+
+    if (message.type === "request-relay") {
+      const room = socket.roomId ? this.rooms.get(socket.roomId) : null;
+      if (socket.role === "viewer" && room?.host?.readyState === WebSocket.OPEN) {
+        this.send(room.host, { type: "relay-requested", viewerId: socket.id });
+      }
+      return;
+    }
+
+    if (message.type === "relay-start" || message.type === "relay-chunk" || message.type === "relay-stop") {
+      if (socket.role !== "host") return;
+      const payload = {
+        ...message,
+        from: socket.id
+      };
+      if (typeof message.to === "string") {
+        this.sendTo(message.to, payload);
+      }
+      return;
+    }
   }
 
   private async hostRoom(socket: Client, requestedRoomId?: string) {

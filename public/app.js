@@ -158,6 +158,7 @@ const translations = {
     emptyWaiting: "Aguardando o apresentador iniciar.",
     emptyNoHost: "Nao tem ninguem transmitindo nessa sala agora. A aba do apresentador precisa continuar aberta.",
     emptyConnectingVideo: "Conectando video ponto a ponto...",
+    emptyConnectingRelay: "Conexao direta falhou. Ativando modo compatibilidade...",
     emptyNoFrames: "Conectou, mas nenhum frame chegou ainda. Tente recarregar ou peca para o apresentador trocar a janela compartilhada.",
     emptyReturn: "Aguardando o apresentador voltar.",
     fullscreen: "Tela cheia",
@@ -264,6 +265,7 @@ const translations = {
     emptyWaiting: "Waiting for the presenter to start.",
     emptyNoHost: "Nobody is presenting in this room right now. The presenter tab must stay open.",
     emptyConnectingVideo: "Connecting peer-to-peer video...",
+    emptyConnectingRelay: "Direct connection failed. Switching to compatibility mode...",
     emptyNoFrames: "Connected, but no frames arrived yet. Try reloading or ask the presenter to switch the shared window.",
     emptyReturn: "Waiting for the presenter to come back.",
     fullscreen: "Fullscreen",
@@ -331,6 +333,15 @@ let authReturnPath = "/";
 let iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
 let frameWatchInterval = null;
 let debugStatsInterval = null;
+let relayRecorder = null;
+let relayMimeType = "";
+let relaySequence = 0;
+let relayRequested = false;
+let relayMediaSource = null;
+let relaySourceBuffer = null;
+let relayObjectUrl = null;
+let relayAppendQueue = [];
+const relayTargets = new Set();
 const peers = new Map();
 const pendingCandidates = new Map();
 
@@ -381,6 +392,11 @@ video.addEventListener("webkitbeginfullscreen", updateFullscreenButton);
 video.addEventListener("webkitendfullscreen", updateFullscreenButton);
 for (const eventName of ["loadstart", "loadedmetadata", "canplay", "playing", "waiting", "stalled", "suspend", "pause", "error", "emptied"]) {
   video.addEventListener(eventName, () => {
+    if (relayMediaSource && ["canplay", "playing"].includes(eventName)) {
+      video.classList.add("is-playing");
+      emptyState.classList.add("hidden");
+      setStatusKey("watching");
+    }
     debugLog(`video:event:${eventName}`, {
       ...videoSnapshot(),
       error: video.error ? { code: video.error.code, message: video.error.message } : null
@@ -494,6 +510,22 @@ async function connect() {
       await callViewer(message.viewerId);
     }
 
+    if (message.type === "relay-requested" && localStream) {
+      startRelayBroadcast(message.viewerId);
+    }
+
+    if (message.type === "relay-start") {
+      startRelayPlayback(message.mimeType);
+    }
+
+    if (message.type === "relay-chunk") {
+      appendRelayChunk(message.chunk);
+    }
+
+    if (message.type === "relay-stop") {
+      stopRelayPlayback();
+    }
+
     if (message.type === "host-ready") {
       hostId = message.hostId;
       hostDisplayName = message.host?.displayName || null;
@@ -508,7 +540,9 @@ async function connect() {
 
     if (message.type === "host-left") {
       cleanupPeers();
+      stopRelayPlayback();
       video.srcObject = null;
+      video.removeAttribute("src");
       video.classList.remove("is-playing");
       emptyState.classList.remove("hidden");
       setMode("waiting");
@@ -522,6 +556,7 @@ async function connect() {
 
     if (message.type === "viewer-left") {
       closePeer(message.viewerId);
+      relayTargets.delete(message.viewerId);
       updateViewerCount(peers.size);
     }
 
@@ -696,6 +731,8 @@ function stopSharing() {
     track.stop();
   }
   localStream = null;
+  stopRelayBroadcast();
+  stopRelayPlayback();
   cleanupPeers();
   stopFrameWatch();
   video.srcObject = null;
@@ -802,6 +839,9 @@ function createPeer(peerId) {
       playRemoteVideo();
       waitForVideoFrame(peer);
     }
+    if (peer.connectionState === "failed" && role === "viewer") {
+      requestRelayFallback("connection_failed");
+    }
     if (["closed", "failed"].includes(peer.connectionState)) {
       closePeer(peerId);
     }
@@ -812,6 +852,7 @@ function createPeer(peerId) {
     trackEvent("ice_state", { state: peer.iceConnectionState });
     if (peer.iceConnectionState === "failed") {
       peer.restartIce?.();
+      if (role === "viewer") requestRelayFallback("ice_failed");
     }
   });
 
@@ -912,7 +953,9 @@ function waitForVideoFrame(peer) {
 
   function markPlaying() {
     const quality = typeof video.getVideoPlaybackQuality === "function" ? video.getVideoPlaybackQuality() : null;
-    if ((video.videoWidth > 0 && video.videoHeight > 0) || (quality?.totalVideoFrames || 0) > 0) {
+    const hasRealSize = video.videoWidth >= 16 && video.videoHeight >= 16;
+    const hasDecodedFrames = (quality?.totalVideoFrames || 0) > 0;
+    if (hasRealSize || hasDecodedFrames) {
       video.classList.add("is-playing");
       emptyState.classList.add("hidden");
       setStatusKey("watching");
@@ -943,6 +986,7 @@ function waitForVideoFrame(peer) {
       setEmptyHint("emptyNoFrames");
       const stats = await remoteVideoStats(peer);
       debugLog("video:no-frames", { ...videoSnapshot(), stats });
+      requestRelayFallback("no_frames");
       trackEvent("video_no_frames", {
         readyState: video.readyState,
         networkState: video.networkState,
@@ -966,8 +1010,13 @@ function startDebugStats(peer) {
   debugStatsInterval = window.setInterval(async () => {
     debugLog("stats:remote-video", {
       video: videoSnapshot(),
+      receivers: peer.getReceivers?.().map((receiver) => ({
+        track: summarizeTrack(receiver.track),
+        parameters: receiver.getParameters?.()
+      })),
       stats: await remoteVideoStats(peer),
-      candidates: await selectedCandidatePair(peer)
+      candidates: await selectedCandidatePair(peer),
+      report: await debugStatsSummary(peer)
     });
   }, 3000);
 }
@@ -976,6 +1025,162 @@ function stopDebugStats() {
   if (!debugStatsInterval) return;
   window.clearInterval(debugStatsInterval);
   debugStatsInterval = null;
+}
+
+function requestRelayFallback(reason) {
+  if (role !== "viewer" || relayRequested || !socket || socket.readyState !== WebSocket.OPEN) return;
+  relayRequested = true;
+  setEmptyHint("emptyConnectingRelay");
+  debugLog("relay:request", { reason, roomId, hostId });
+  trackEvent("relay_requested", { reason });
+  socket.send(JSON.stringify({ type: "request-relay", reason }));
+}
+
+function startRelayBroadcast(viewerId) {
+  if (!viewerId || !localStream || !socket || socket.readyState !== WebSocket.OPEN) return;
+  relayMimeType = relayMimeType || pickRelayMimeType();
+  if (!window.MediaRecorder || !relayMimeType) {
+    debugLog("relay:unsupported", { mediaRecorder: Boolean(window.MediaRecorder), relayMimeType });
+    return;
+  }
+
+  relayTargets.add(viewerId);
+  debugLog("relay:target-added", { viewerId, targetCount: relayTargets.size, relayMimeType });
+  socket.send(JSON.stringify({ type: "relay-start", to: viewerId, mimeType: relayMimeType }));
+
+  if (relayRecorder && relayRecorder.state !== "inactive") return;
+
+  relaySequence = 0;
+  relayRecorder = new MediaRecorder(localStream, {
+    mimeType: relayMimeType,
+    videoBitsPerSecond: 1200000
+  });
+
+  relayRecorder.addEventListener("dataavailable", async (event) => {
+    if (!event.data?.size || !relayTargets.size) return;
+    const chunk = await blobToBase64(event.data);
+    relaySequence += 1;
+    debugLog("relay:chunk-send", { sequence: relaySequence, bytes: event.data.size, targetCount: relayTargets.size });
+    for (const target of relayTargets) {
+      socket.send(JSON.stringify({ type: "relay-chunk", to: target, sequence: relaySequence, chunk }));
+    }
+  });
+
+  relayRecorder.addEventListener("stop", () => {
+    debugLog("relay:recorder-stop", { targetCount: relayTargets.size });
+    for (const target of relayTargets) {
+      socket?.send(JSON.stringify({ type: "relay-stop", to: target }));
+    }
+    relayTargets.clear();
+    relayRecorder = null;
+  });
+
+  relayRecorder.start(1000);
+  debugLog("relay:recorder-start", { relayMimeType });
+  trackEvent("relay_started", { mode: "host" });
+}
+
+function stopRelayBroadcast() {
+  for (const target of relayTargets) {
+    socket?.send(JSON.stringify({ type: "relay-stop", to: target }));
+  }
+  relayTargets.clear();
+  if (relayRecorder && relayRecorder.state !== "inactive") {
+    relayRecorder.stop();
+  }
+  relayRecorder = null;
+}
+
+function startRelayPlayback(mimeType) {
+  if (!window.MediaSource || !MediaSource.isTypeSupported(mimeType)) {
+    debugLog("relay:playback-unsupported", { mimeType, mediaSource: Boolean(window.MediaSource) });
+    return;
+  }
+
+  stopRelayPlayback();
+  cleanupPeers();
+  relayRequested = true;
+  relayAppendQueue = [];
+  relayMediaSource = new MediaSource();
+  relayObjectUrl = URL.createObjectURL(relayMediaSource);
+  video.srcObject = null;
+  video.src = relayObjectUrl;
+  video.muted = true;
+  video.autoplay = true;
+  video.playsInline = true;
+  video.classList.remove("is-playing");
+  emptyState.classList.remove("hidden");
+  setEmptyHint("emptyConnectingRelay");
+
+  relayMediaSource.addEventListener("sourceopen", () => {
+    relaySourceBuffer = relayMediaSource.addSourceBuffer(mimeType);
+    relaySourceBuffer.mode = "sequence";
+    relaySourceBuffer.addEventListener("updateend", flushRelayQueue);
+    flushRelayQueue();
+  });
+
+  debugLog("relay:playback-start", { mimeType });
+  trackEvent("relay_started", { mode: "viewer" });
+}
+
+function appendRelayChunk(chunk) {
+  if (!chunk) return;
+  const bytes = base64ToBytes(chunk);
+  relayAppendQueue.push(bytes);
+  debugLog("relay:chunk-received", { bytes: bytes.byteLength, queue: relayAppendQueue.length });
+  flushRelayQueue();
+}
+
+function flushRelayQueue() {
+  if (!relaySourceBuffer || relaySourceBuffer.updating || !relayAppendQueue.length) return;
+  const bytes = relayAppendQueue.shift();
+  try {
+    relaySourceBuffer.appendBuffer(bytes);
+    playRemoteVideo();
+  } catch (error) {
+    debugLog("relay:append-failed", { name: error.name, message: error.message, queue: relayAppendQueue.length });
+  }
+}
+
+function stopRelayPlayback() {
+  relayAppendQueue = [];
+  relaySourceBuffer = null;
+  if (relayMediaSource?.readyState === "open") {
+    try {
+      relayMediaSource.endOfStream();
+    } catch {
+      // The MediaSource can already be closing; nothing to recover here.
+    }
+  }
+  relayMediaSource = null;
+  if (relayObjectUrl) {
+    URL.revokeObjectURL(relayObjectUrl);
+    relayObjectUrl = null;
+  }
+  relayRequested = false;
+}
+
+function pickRelayMimeType() {
+  const candidates = ["video/webm;codecs=vp8", "video/webm"];
+  return candidates.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) || "";
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function base64ToBytes(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
 }
 
 async function remoteVideoStats(peer) {
@@ -993,7 +1198,7 @@ async function remoteVideoStats(peer) {
       }
     }
     for (const item of report.values()) {
-      if (item.type === "inbound-rtp" && item.kind === "video") {
+      if (item.type === "inbound-rtp" && (item.kind === "video" || item.mediaType === "video")) {
         return {
           bytesReceived: item.bytesReceived || 0,
           packetsReceived: item.packetsReceived || 0,
@@ -1027,6 +1232,9 @@ async function selectedCandidatePair(peer) {
       if (item.type === "candidate-pair" && item.selected) {
         selectedPair = item;
       }
+      if (item.type === "candidate-pair" && item.nominated && item.state === "succeeded") {
+        selectedPair = selectedPair || item;
+      }
     }
     if (!selectedPair) return {};
     const local = report.get(selectedPair.localCandidateId);
@@ -1041,6 +1249,60 @@ async function selectedCandidatePair(peer) {
     };
   } catch {
     return {};
+  }
+}
+
+async function debugStatsSummary(peer) {
+  if (!debugEnabled || !peer?.getStats) return {};
+  try {
+    const report = await peer.getStats();
+    const summary = {
+      types: {},
+      inboundVideo: [],
+      candidatePairs: [],
+      transports: []
+    };
+    for (const item of report.values()) {
+      summary.types[item.type] = (summary.types[item.type] || 0) + 1;
+      if (item.type === "inbound-rtp" && (item.kind === "video" || item.mediaType === "video")) {
+        summary.inboundVideo.push({
+          id: item.id,
+          kind: item.kind,
+          mediaType: item.mediaType,
+          bytesReceived: item.bytesReceived,
+          packetsReceived: item.packetsReceived,
+          framesReceived: item.framesReceived,
+          framesDecoded: item.framesDecoded,
+          frameWidth: item.frameWidth,
+          frameHeight: item.frameHeight,
+          codecId: item.codecId
+        });
+      }
+      if (item.type === "candidate-pair") {
+        summary.candidatePairs.push({
+          id: item.id,
+          state: item.state,
+          selected: item.selected,
+          nominated: item.nominated,
+          bytesReceived: item.bytesReceived,
+          bytesSent: item.bytesSent,
+          localCandidateId: item.localCandidateId,
+          remoteCandidateId: item.remoteCandidateId
+        });
+      }
+      if (item.type === "transport") {
+        summary.transports.push({
+          id: item.id,
+          selectedCandidatePairId: item.selectedCandidatePairId,
+          dtlsState: item.dtlsState,
+          iceRole: item.iceRole,
+          iceLocalUsernameFragment: item.iceLocalUsernameFragment
+        });
+      }
+    }
+    return summary;
+  } catch (error) {
+    return { error: error.message };
   }
 }
 
