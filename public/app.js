@@ -94,13 +94,11 @@ const appNav = document.querySelector(".app-nav");
 
 const params = new URLSearchParams(window.location.search);
 const debugEnabled = params.get("debug") === "true";
-const requestedVideoTopCrop = Number(params.get("cropTop"));
-const STREAM_VIDEO_WIDTH = 2560;
-const STREAM_VIDEO_HEIGHT = 1440;
-const STREAM_FRAME_RATE = 60;
-const STREAM_MIN_BITRATE = 2500000;
-const STREAM_START_BITRATE = 8000000;
-const STREAM_MAX_BITRATE = 16000000;
+const highQualityEnabled = params.get("quality") === "high";
+const STREAM_VIDEO_WIDTH = highQualityEnabled ? 2560 : 1920;
+const STREAM_VIDEO_HEIGHT = highQualityEnabled ? 1440 : 1080;
+const STREAM_FRAME_RATE = highQualityEnabled ? 60 : 30;
+const STREAM_MAX_BITRATE = highQualityEnabled ? 16000000 : 8000000;
 const translations = {
   pt: {
     pageDescription: "screen2.me cria uma sala rapida para compartilhar sua tela por link.",
@@ -348,7 +346,6 @@ const pendingCandidates = new Map();
 
 applyLanguage(language);
 applyRouteState();
-applyVideoTopCrop();
 registerServiceWorker();
 setupCurrentRoute();
 Promise.all([loadSession(), loadRuntimeConfig()]).then(() => {
@@ -388,12 +385,11 @@ registerForm?.addEventListener("submit", registerAccount);
 loginForm?.addEventListener("submit", loginAccount);
 profileForm?.addEventListener("submit", updateProfile);
 logoutButton?.addEventListener("click", logoutAccount);
-document.addEventListener("fullscreenchange", handleFullscreenChange);
-document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+document.addEventListener("fullscreenchange", updateFullscreenButton);
+document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
 document.addEventListener("visibilitychange", handleVisibilityChange);
-window.addEventListener("resize", updateVideoCropTransform);
-video.addEventListener("webkitbeginfullscreen", handleFullscreenChange);
-video.addEventListener("webkitendfullscreen", handleFullscreenChange);
+video.addEventListener("webkitbeginfullscreen", updateFullscreenButton);
+video.addEventListener("webkitendfullscreen", updateFullscreenButton);
 for (const eventName of ["loadstart", "loadedmetadata", "canplay", "playing", "waiting", "stalled", "suspend", "pause", "error", "emptied"]) {
   video.addEventListener(eventName, () => {
     debugLog(`video:event:${eventName}`, {
@@ -408,9 +404,7 @@ window.addEventListener("beforeunload", () => {
   }
 });
 window.addEventListener("popstate", setupCurrentRoute);
-window.addEventListener("orientationchange", () => {
-  if (isPseudoFullscreen()) window.setTimeout(updateFullscreenButton, 250);
-});
+window.addEventListener("orientationchange", () => window.setTimeout(updateFullscreenButton, 250));
 
 async function connect() {
   if (!location.host || location.protocol === "file:") {
@@ -792,9 +786,10 @@ async function callViewer(viewerId) {
     const sender = peer.addTrack(track, localStream);
     await tuneVideoSender(sender);
   }
+  preferVp8(peer);
   const offer = await peer.createOffer();
   debugLog("webrtc:offer-created", { viewerId, sdp: summarizeSdp(offer.sdp) });
-  await peer.setLocalDescription(enhanceVideoDescription(offer));
+  await peer.setLocalDescription(offer);
   debugLog("webrtc:offer-local-description", { viewerId, sdp: summarizeSdp(peer.localDescription?.sdp) });
   sendSignal(viewerId, peer.localDescription);
 }
@@ -807,9 +802,10 @@ async function handleSignal(from, signal) {
     await peer.setRemoteDescription(signal);
     debugLog("webrtc:offer-remote-description", { from, sdp: summarizeSdp(signal.sdp) });
     await flushPendingCandidates(from, peer);
+    preferVp8(peer);
     const answer = await peer.createAnswer();
     debugLog("webrtc:answer-created", { from, sdp: summarizeSdp(answer.sdp) });
-    await peer.setLocalDescription(enhanceVideoDescription(answer));
+    await peer.setLocalDescription(answer);
     debugLog("webrtc:answer-local-description", { from, sdp: summarizeSdp(peer.localDescription?.sdp) });
     sendSignal(from, peer.localDescription);
     return;
@@ -900,15 +896,22 @@ function createPeer(peerId) {
 }
 
 function preferVp8(peer) {
-  if (!window.RTCRtpSender?.getCapabilities) return;
-  const capabilities = window.RTCRtpSender.getCapabilities("video");
-  const vp8 = capabilities?.codecs?.filter((codec) => codec.mimeType.toLowerCase() === "video/vp8") || [];
-  const rest = capabilities?.codecs?.filter((codec) => codec.mimeType.toLowerCase() !== "video/vp8") || [];
-  if (!vp8.length) return;
+  if (!window.RTCRtpReceiver?.getCapabilities) return;
+  const codecs = RTCRtpReceiver.getCapabilities("video")?.codecs || [];
+  if (!codecs.some((codec) => codec.mimeType.toLowerCase() === "video/vp8")) return;
+  const sortedCodecs = [...codecs].sort((a, b) => {
+    const aIsVp8 = a.mimeType.toLowerCase() === "video/vp8";
+    const bIsVp8 = b.mimeType.toLowerCase() === "video/vp8";
+    return Number(bIsVp8) - Number(aIsVp8);
+  });
 
   for (const transceiver of peer.getTransceivers()) {
     if (transceiver.sender?.track?.kind === "video" || transceiver.receiver?.track?.kind === "video") {
-      transceiver.setCodecPreferences?.([...vp8, ...rest]);
+      try {
+        transceiver.setCodecPreferences?.(sortedCodecs);
+      } catch (error) {
+        debugLog("webrtc:codec-preference-failed", { name: error.name, message: error.message });
+      }
     }
   }
 }
@@ -930,72 +933,6 @@ async function tuneVideoSender(sender) {
   } catch (error) {
     debugLog("webrtc:sender-tune-failed", { name: error.name, message: error.message });
   }
-}
-
-function enhanceVideoDescription(description) {
-  if (!description?.sdp) return description;
-  return {
-    type: description.type,
-    sdp: setVideoBitrate(description.sdp)
-  };
-}
-
-function setVideoBitrate(sdp) {
-  const lines = sdp.split("\r\n");
-  const videoLineIndex = lines.findIndex((line) => line.startsWith("m=video"));
-  if (videoLineIndex === -1) return sdp;
-
-  const nextMediaLineIndex = lines.findIndex((line, index) => index > videoLineIndex && line.startsWith("m="));
-  const videoEndIndex = nextMediaLineIndex === -1 ? lines.length : nextMediaLineIndex;
-  const bitrateAs = Math.floor(STREAM_MAX_BITRATE / 1000);
-  const bitrateLineIndex = lines.findIndex((line, index) => index > videoLineIndex && index < videoEndIndex && line.startsWith("b=AS:"));
-
-  if (bitrateLineIndex === -1) {
-    const connectionLineIndex = lines.findIndex((line, index) => index > videoLineIndex && index < videoEndIndex && line.startsWith("c="));
-    lines.splice(connectionLineIndex === -1 ? videoLineIndex + 1 : connectionLineIndex + 1, 0, `b=AS:${bitrateAs}`);
-  } else {
-    lines[bitrateLineIndex] = `b=AS:${bitrateAs}`;
-  }
-
-  const payloads = lines
-    .slice(videoLineIndex + 1, videoEndIndex)
-    .map((line) => line.match(/^a=rtpmap:(\d+) ([^/\r\n]+)/i))
-    .filter((match) => match && !["rtx", "red", "ulpfec", "flexfec-03"].includes(match[2].toLowerCase()))
-    .map((match) => match[1]);
-  for (const payload of payloads) {
-    const fmtpIndex = lines.findIndex((line, index) => index > videoLineIndex && index < videoEndIndex && line.startsWith(`a=fmtp:${payload} `));
-    const bitrateParams = `x-google-min-bitrate=${Math.floor(STREAM_MIN_BITRATE / 1000)};x-google-start-bitrate=${Math.floor(STREAM_START_BITRATE / 1000)};x-google-max-bitrate=${bitrateAs}`;
-    if (fmtpIndex === -1) {
-      const rtpmapIndex = lines.findIndex((line, index) => index > videoLineIndex && index < videoEndIndex && line.startsWith(`a=rtpmap:${payload} `));
-      if (rtpmapIndex !== -1) lines.splice(rtpmapIndex + 1, 0, `a=fmtp:${payload} ${bitrateParams}`);
-      continue;
-    }
-    if (lines[fmtpIndex].includes("x-google-max-bitrate")) continue;
-    lines[fmtpIndex] = `${lines[fmtpIndex]};${bitrateParams}`;
-  }
-
-  return lines.join("\r\n");
-}
-
-function preferCodec(sdp, kind, codecName) {
-  const lines = sdp.split("\r\n");
-  const mLineIndex = lines.findIndex((line) => line.startsWith(`m=${kind}`));
-  if (mLineIndex === -1) return sdp;
-
-  const codecPayloads = [];
-  for (const line of lines) {
-    const match = line.match(new RegExp(`^a=rtpmap:(\\d+) ${codecName}/`, "i"));
-    if (match) codecPayloads.push(match[1]);
-  }
-  if (!codecPayloads.length) return sdp;
-
-  const parts = lines[mLineIndex].split(" ");
-  const header = parts.slice(0, 3);
-  const payloads = parts.slice(3);
-  const preferred = codecPayloads.filter((payload) => payloads.includes(payload));
-  const remaining = payloads.filter((payload) => !preferred.includes(payload));
-  lines[mLineIndex] = [...header, ...preferred, ...remaining].join(" ");
-  return lines.join("\r\n");
 }
 
 async function showRemoteStream(stream, track, peer) {
@@ -1052,7 +989,6 @@ function waitForVideoFrame(peer) {
     if (hasRealSize || hasDecodedFrames) {
       video.classList.add("is-playing");
       updateScreenAspectRatio();
-      updateVideoCropTransform();
       emptyState.classList.add("hidden");
       setStatusKey("watching");
       debugLog("video:playing-detected", videoSnapshot());
@@ -1291,19 +1227,6 @@ function updateScreenAspectRatio() {
 
 function resetScreenAspectRatio() {
   screenFrame.style.removeProperty("--screen-aspect-ratio");
-}
-
-function applyVideoTopCrop() {
-  if (!Number.isFinite(requestedVideoTopCrop)) return;
-  const crop = Math.max(0, Math.min(160, Math.round(requestedVideoTopCrop)));
-  document.documentElement.style.setProperty("--video-top-crop", `${crop}px`);
-  updateVideoCropTransform();
-  debugLog("video:top-crop", { crop });
-}
-
-function updateVideoCropTransform() {
-  screenFrame.style.setProperty("--video-crop-height", "100%");
-  screenFrame.style.setProperty("--video-crop-shift", "0px");
 }
 
 function summarizeTrack(track) {
@@ -1625,7 +1548,6 @@ async function toggleFullscreen() {
     await enterFullscreenMode();
   } catch (error) {
     console.warn("Fullscreen failed", error);
-    setPseudoFullscreen(true);
   }
 }
 
@@ -1637,13 +1559,24 @@ function updateFullscreenButton() {
   fullscreenButton.querySelector(".exit-fullscreen").classList.toggle("hidden", !fullscreenActive);
 }
 
-function handleFullscreenChange() {
-  updateFullscreenButton();
-  updateVideoCropTransform();
-}
-
 async function enterFullscreenMode() {
-  setPseudoFullscreen(true);
+  const request =
+    screenFrame.requestFullscreen ||
+    screenFrame.webkitRequestFullscreen ||
+    screenFrame.webkitRequestFullScreen ||
+    screenFrame.msRequestFullscreen;
+
+  if (request) {
+    await request.call(screenFrame);
+    updateFullscreenButton();
+    return;
+  }
+
+  const videoFullscreen = video.webkitEnterFullscreen || video.webkitEnterFullScreen;
+  if (videoFullscreen && video.srcObject && video.classList.contains("is-playing")) {
+    videoFullscreen.call(video);
+    updateFullscreenButton();
+  }
 }
 
 async function exitFullscreenMode() {
@@ -1662,7 +1595,6 @@ async function exitFullscreenMode() {
     exitVideoFullscreen?.call(video);
   }
 
-  setPseudoFullscreen(false);
   updateFullscreenButton();
 }
 
@@ -1671,20 +1603,8 @@ function isFullscreen() {
     document.fullscreenElement ||
       document.webkitFullscreenElement ||
       document.msFullscreenElement ||
-      video.webkitDisplayingFullscreen ||
-      isPseudoFullscreen()
+      video.webkitDisplayingFullscreen
   );
-}
-
-function isPseudoFullscreen() {
-  return screenFrame.classList.contains("is-pseudo-fullscreen");
-}
-
-function setPseudoFullscreen(enabled) {
-  screenFrame.classList.toggle("is-pseudo-fullscreen", enabled);
-  document.body.classList.toggle("pseudo-fullscreen-open", enabled);
-  handleFullscreenChange();
-  requestAnimationFrame(updateVideoCropTransform);
 }
 
 function registerServiceWorker() {

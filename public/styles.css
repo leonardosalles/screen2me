@@ -14,24 +14,15 @@
   --warn: #ffd166;
   --danger: #ff5d6c;
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
-  --video-top-crop: 80px;
-  --video-crop-height: 100%;
-  --video-crop-shift: 0px;
 }
 
 * {
   box-sizing: border-box;
 }
 
-html {
-  height: 100%;
-  overflow: hidden;
-}
-
 body {
   margin: 0;
-  height: 100%;
-  overflow: hidden;
+  min-height: 100vh;
   background:
     radial-gradient(circle at 20% 0%, rgba(53, 225, 154, 0.16), transparent 32rem),
     linear-gradient(140deg, #10131a 0%, #171321 48%, #10131a 100%);
@@ -41,11 +32,6 @@ body {
 
 body.modal-open {
   overflow: hidden;
-}
-
-body.pseudo-fullscreen-open {
-  overflow: hidden;
-  touch-action: none;
 }
 
 button,
@@ -61,10 +47,7 @@ a {
 .shell {
   display: grid;
   grid-template-columns: minmax(300px, 360px) 1fr;
-  height: calc(100vh - 72px);
-  height: calc(100dvh - 72px);
-  min-height: 0;
-  overflow: hidden;
+  min-height: calc(100vh - 72px);
 }
 
 .app-nav {
@@ -150,8 +133,6 @@ a {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  min-height: 0;
-  overflow: auto;
   padding: 26px;
   background: rgba(23, 27, 36, 0.92);
   border-right: 1px solid var(--line);
@@ -522,8 +503,8 @@ input {
   flex-direction: column;
   gap: 16px;
   min-width: 0;
-  min-height: 0;
-  overflow: hidden;
+  height: calc(100vh - 72px);
+  min-height: 620px;
   padding: 26px;
 }
 
@@ -593,39 +574,6 @@ input {
   background: #090b10;
 }
 
-.screen-frame.is-pseudo-fullscreen {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  width: 100vw;
-  height: 100vh;
-  height: 100svh;
-  height: 100dvh;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: #050607;
-  box-shadow: none;
-}
-
-.screen-frame.is-pseudo-fullscreen video {
-  background: #050607;
-}
-
-.screen-frame.is-pseudo-fullscreen .empty-state {
-  background: #090b10;
-}
-
-body.pseudo-fullscreen-open #fullscreenButton {
-  position: fixed;
-  top: calc(12px + env(safe-area-inset-top));
-  right: calc(12px + env(safe-area-inset-right));
-  z-index: 110;
-  background: rgba(32, 38, 50, 0.88);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
-}
-
 .screen-frame {
   position: relative;
   display: grid;
@@ -660,8 +608,7 @@ video.is-playing {
   opacity: 1;
 }
 
-.screen-frame:fullscreen video.is-playing,
-.screen-frame.is-pseudo-fullscreen video.is-playing {
+.screen-frame:fullscreen video.is-playing {
   height: 100%;
   object-fit: contain;
   transform: none;
@@ -1046,26 +993,24 @@ video.is-playing {
   .shell {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(0, auto) minmax(0, 1fr);
-    height: auto;
-    min-height: calc(100dvh - 122px);
-    overflow: auto;
+    min-height: auto;
   }
 
   .control {
-    max-height: 42vh;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
 
   .stage {
-    min-height: 0;
+    height: auto;
+    min-height: 56vh;
     padding: 18px;
   }
 
   .screen-frame {
     aspect-ratio: var(--screen-aspect-ratio, 16 / 10);
     max-height: none;
-    min-height: 0;
+    min-height: 300px;
   }
 }
 
