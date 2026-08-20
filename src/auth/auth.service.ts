@@ -99,6 +99,43 @@ export class AuthService {
     });
   }
 
+  async updateProfile(sessionId: string, input: unknown) {
+    const current = await this.currentUser(sessionId);
+    if (!current) {
+      throw new UnauthorizedException("Login required");
+    }
+
+    const body = this.object(input);
+    const username = this.username(body.username);
+    const name = this.cleanText(body.name, 120);
+
+    if (!this.prisma.enabled) {
+      const user = this.memoryUsersBySession.get(sessionId);
+      if (!user) throw new UnauthorizedException("Login required");
+      const existing = this.memoryUsersByUsername.get(username);
+      if (existing && existing !== user) {
+        throw new BadRequestException("Username already registered");
+      }
+      if (user.username) this.memoryUsersByUsername.delete(user.username);
+      user.username = username;
+      user.name = name;
+      this.memoryUsersByUsername.set(username, user);
+      if (user.email) this.memoryUsersByEmail.set(user.email, user);
+      this.memoryUsersBySession.set(sessionId, user);
+      return user;
+    }
+
+    try {
+      return await this.prisma.user.update({
+        where: { sessionId },
+        data: { username, name },
+        select: { id: true, username: true, name: true, email: true, language: true }
+      });
+    } catch {
+      throw new BadRequestException("Username already registered");
+    }
+  }
+
   async logout(sessionId: string) {
     if (!this.prisma.enabled) {
       this.memoryUsersBySession.delete(sessionId);

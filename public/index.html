@@ -83,7 +83,7 @@
         <section id="accountCta" class="account-cta" aria-label="Account benefits">
           <span id="accountCtaEyebrow">Free account</span>
           <strong id="accountCtaTitle">Share without losing context</strong>
-          <p id="accountCtaText">Save room history, reserve an @username, and reuse links. The app stays free.</p>
+          <p id="accountCtaText">Save room history, reserve an @username, and use your fixed /@username/live link. The app stays free.</p>
         </section>
 
         <section id="trialPanel" class="trial-panel hidden" aria-label="Trial limit">
@@ -239,7 +239,7 @@
         <div>
           <div class="modal-eyebrow" id="authEyebrow">Account</div>
           <h2 id="authTitle">Reserve your fixed sharing link</h2>
-          <p id="authIntro">Create an account to keep room history and claim a username link like screen2.me/leonardo.</p>
+          <p id="authIntro">Create an account to keep room history and claim a link like screen2.me/@leonardo/live.</p>
         </div>
 
         <div class="auth-tabs" role="tablist">
@@ -280,6 +280,20 @@
             <input id="loginPasswordInput" autocomplete="current-password" type="password" required />
           </label>
           <button id="loginButton" class="primary modal-primary" type="submit">Login</button>
+        </form>
+
+        <form id="profileForm" class="identity-form hidden">
+          <label>
+            <span id="profileNameLabel">Name</span>
+            <input id="profileNameInput" autocomplete="name" placeholder="Leonardo" />
+          </label>
+          <label>
+            <span id="profileUsernameLabel">Username</span>
+            <input id="profileUsernameInput" autocomplete="username" placeholder="@leonardo" required />
+            <small id="profileUsernameHint">Use letters, numbers, or underscores. Ex: @alex</small>
+          </label>
+          <button id="profileButton" class="primary modal-primary" type="submit">Save profile</button>
+          <button id="logoutButton" class="danger modal-primary" type="button">Logout</button>
         </form>
 
         <p id="authMessage" class="auth-message" role="status"></p>

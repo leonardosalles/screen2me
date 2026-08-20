@@ -4,7 +4,7 @@ import type { Response } from "express";
 
 @Controller()
 export class SiteController {
-  @Get(["/", "/watch", "/account"])
+  @Get(["/", "/watch", "/account", "/:handle/live"])
   app(@Res() res: Response) {
     res.sendFile(join(process.cwd(), "public", "index.html"));
   }

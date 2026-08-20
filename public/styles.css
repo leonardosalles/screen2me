@@ -34,6 +34,11 @@ body.modal-open {
   overflow: hidden;
 }
 
+body.pseudo-fullscreen-open {
+  overflow: hidden;
+  touch-action: none;
+}
+
 button,
 input,
 select {
@@ -566,6 +571,35 @@ input {
   background: #090b10;
 }
 
+.screen-frame.is-pseudo-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+  border: 0;
+  border-radius: 0;
+  background: #050607;
+}
+
+.screen-frame.is-pseudo-fullscreen video {
+  background: #050607;
+}
+
+.screen-frame.is-pseudo-fullscreen .empty-state {
+  background: #090b10;
+}
+
+body.pseudo-fullscreen-open #fullscreenButton {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
+  z-index: 110;
+  background: rgba(32, 38, 50, 0.88);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+}
+
 .screen-frame {
   position: relative;
   display: grid;
@@ -931,6 +965,10 @@ video.is-playing {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #10141c;
+}
+
+.auth-tabs.hidden {
+  display: none;
 }
 
 .auth-tabs button {

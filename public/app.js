@@ -66,6 +66,7 @@ const registerTab = document.querySelector("#registerTab");
 const loginTab = document.querySelector("#loginTab");
 const registerForm = document.querySelector("#registerForm");
 const loginForm = document.querySelector("#loginForm");
+const profileForm = document.querySelector("#profileForm");
 const registerNameLabel = document.querySelector("#registerNameLabel");
 const usernameLabel = document.querySelector("#usernameLabel");
 const usernameHint = document.querySelector("#usernameHint");
@@ -73,8 +74,13 @@ const registerEmailLabel = document.querySelector("#registerEmailLabel");
 const registerPasswordLabel = document.querySelector("#registerPasswordLabel");
 const loginEmailLabel = document.querySelector("#loginEmailLabel");
 const loginPasswordLabel = document.querySelector("#loginPasswordLabel");
+const profileNameLabel = document.querySelector("#profileNameLabel");
+const profileUsernameLabel = document.querySelector("#profileUsernameLabel");
+const profileUsernameHint = document.querySelector("#profileUsernameHint");
 const registerButton = document.querySelector("#registerButton");
 const loginButton = document.querySelector("#loginButton");
+const profileButton = document.querySelector("#profileButton");
+const logoutButton = document.querySelector("#logoutButton");
 const authMessage = document.querySelector("#authMessage");
 const registerNameInput = document.querySelector("#registerNameInput");
 const usernameInput = document.querySelector("#usernameInput");
@@ -82,6 +88,8 @@ const registerEmailInput = document.querySelector("#registerEmailInput");
 const registerPasswordInput = document.querySelector("#registerPasswordInput");
 const loginEmailInput = document.querySelector("#loginEmailInput");
 const loginPasswordInput = document.querySelector("#loginPasswordInput");
+const profileNameInput = document.querySelector("#profileNameInput");
+const profileUsernameInput = document.querySelector("#profileUsernameInput");
 const appNav = document.querySelector(".app-nav");
 
 const params = new URLSearchParams(window.location.search);
@@ -130,7 +138,7 @@ const translations = {
     manage: "Editar",
     accountCtaEyebrow: "Conta gratuita",
     accountCtaTitle: "Compartilhe sem perder contexto",
-    accountCtaText: "Guarde historico, reserve um @username e use links recorrentes. O app continua gratuito.",
+    accountCtaText: "Guarde historico, reserve um @username e use seu link fixo /@username/live. O app continua gratuito.",
     trialLabel: "Acesso anonimo",
     trialText: "Sem conta, transmissao e visualizacao duram ate 15 minutos. Crie uma conta gratuita para continuar.",
     trialCreateAccount: "Criar conta",
@@ -162,13 +170,13 @@ const translations = {
     stepOneTitle: "Inicie uma sala",
     stepOneText: "Clique em Compartilhar e escolha uma tela, janela ou aba.",
     stepTwoTitle: "Envie o link",
-    stepTwoText: "Copie o link /watch e mande para o grupo.",
+    stepTwoText: "Copie o link da sala ou seu /@username/live e mande para o grupo.",
     stepThreeTitle: "Fique ao vivo",
     stepThreeText: "Mantenha esta aba aberta enquanto as pessoas assistem.",
     benefitHistoryTitle: "Historico de salas",
     benefitHistoryText: "Encontre salas e sessoes anteriores sem procurar em conversas.",
     benefitUsernameTitle: "Link fixo",
-    benefitUsernameText: "Reserve um username para um link pessoal como screen2.me/leonardo.",
+    benefitUsernameText: "Reserve um username para um link pessoal como screen2.me/@leonardo/live.",
     name: "Nome",
     email: "Email",
     username: "Username",
@@ -178,9 +186,15 @@ const translations = {
     login: "Entrar",
     account: "Conta",
     authTitle: "Reserve seu link fixo de compartilhamento",
-    authIntro: "Crie uma conta para guardar historico de salas e reservar um username como screen2.me/leonardo.",
+    authIntro: "Crie uma conta para guardar historico de salas e reservar um link como screen2.me/@leonardo/live.",
     authSuccess: "Conta pronta. Voltando para o app...",
     authLoginSuccess: "Login feito. Voltando para o app...",
+    profileTitle: "Edite seu perfil",
+    profileIntro: "Atualize o nome exibido e o @username do seu link fixo.",
+    profileSave: "Salvar perfil",
+    profileSuccess: "Perfil atualizado.",
+    logout: "Sair",
+    logoutSuccess: "Voce saiu da conta.",
     authError: "Nao foi possivel concluir. Confira os dados e tente novamente.",
     skip: "Pular",
     continue: "Continuar"
@@ -229,7 +243,7 @@ const translations = {
     manage: "Edit",
     accountCtaEyebrow: "Free account",
     accountCtaTitle: "Share without losing context",
-    accountCtaText: "Save room history, reserve an @username, and reuse links. The app stays free.",
+    accountCtaText: "Save room history, reserve an @username, and use your fixed /@username/live link. The app stays free.",
     trialLabel: "Anonymous access",
     trialText: "Without an account, streaming and watching are limited to 15 minutes. Create a free account to continue.",
     trialCreateAccount: "Create account",
@@ -261,13 +275,13 @@ const translations = {
     stepOneTitle: "Start a room",
     stepOneText: "Click Share and choose a screen, window, or tab.",
     stepTwoTitle: "Send the link",
-    stepTwoText: "Copy the /watch link and send it to your group.",
+    stepTwoText: "Copy the room link or your /@username/live and send it to your group.",
     stepThreeTitle: "Stay live",
     stepThreeText: "Keep this tab open while people are watching.",
     benefitHistoryTitle: "Room history",
     benefitHistoryText: "Find past rooms and sessions without digging through chats.",
     benefitUsernameTitle: "Fixed share link",
-    benefitUsernameText: "Reserve a username for a personal link like screen2.me/leonardo.",
+    benefitUsernameText: "Reserve a username for a personal link like screen2.me/@leonardo/live.",
     name: "Name",
     email: "Email",
     username: "Username",
@@ -277,9 +291,15 @@ const translations = {
     login: "Login",
     account: "Account",
     authTitle: "Reserve your fixed sharing link",
-    authIntro: "Create an account to keep room history and claim a username like screen2.me/leonardo.",
+    authIntro: "Create an account to keep room history and claim a link like screen2.me/@leonardo/live.",
     authSuccess: "Account ready. Taking you back to the app...",
     authLoginSuccess: "Logged in. Taking you back to the app...",
+    profileTitle: "Edit your profile",
+    profileIntro: "Update your display name and fixed-link @username.",
+    profileSave: "Save profile",
+    profileSuccess: "Profile updated.",
+    logout: "Logout",
+    logoutSuccess: "You are logged out.",
     authError: "Could not complete. Check your details and try again.",
     skip: "Skip",
     continue: "Continue"
@@ -287,7 +307,7 @@ const translations = {
 };
 
 let language = getInitialLanguage();
-let roomId = params.get("roomId") || params.get("room");
+let roomId = params.get("roomId") || params.get("room") || getLiveRoomFromPath();
 let role = roomId || location.pathname === "/watch" ? "viewer" : "idle";
 let socket;
 let localStream;
@@ -303,6 +323,8 @@ let hostDisplayName = null;
 let trialEndsAt = null;
 let trialInterval = null;
 let audience = [];
+let authMode = "register";
+let authReturnPath = "/";
 const peers = new Map();
 const pendingCandidates = new Map();
 
@@ -320,7 +342,7 @@ copyButton.addEventListener("click", copyRoomLink);
 fullscreenButton.addEventListener("click", toggleFullscreen);
 languageSelect.addEventListener("change", () => applyLanguage(languageSelect.value));
 accountButton?.addEventListener("click", () => {
-  openAuthModal("register", true);
+  openAuthModal(currentUser ? "profile" : "register", true);
 });
 closeHowToButton?.addEventListener("click", closeHowToModal);
 skipHowToButton?.addEventListener("click", closeHowToModal);
@@ -336,13 +358,21 @@ registerTab?.addEventListener("click", () => setAuthMode("register"));
 loginTab?.addEventListener("click", () => setAuthMode("login"));
 registerForm?.addEventListener("submit", registerAccount);
 loginForm?.addEventListener("submit", loginAccount);
+profileForm?.addEventListener("submit", updateProfile);
+logoutButton?.addEventListener("click", logoutAccount);
 document.addEventListener("fullscreenchange", updateFullscreenButton);
+document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
+video.addEventListener("webkitbeginfullscreen", updateFullscreenButton);
+video.addEventListener("webkitendfullscreen", updateFullscreenButton);
 window.addEventListener("beforeunload", () => {
   if (socket?.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: "leave-room" }));
   }
 });
 window.addEventListener("popstate", setupCurrentRoute);
+window.addEventListener("orientationchange", () => {
+  if (isPseudoFullscreen()) window.setTimeout(updateFullscreenButton, 250);
+});
 
 async function connect() {
   if (!location.host || location.protocol === "file:") {
@@ -511,6 +541,9 @@ async function startSharing() {
   try {
     shareButton.disabled = true;
     setStatusKey("chooseScreen");
+    if (currentUser?.username) {
+      roomId = currentUser.username;
+    }
     localStream = await navigator.mediaDevices.getDisplayMedia({
       video: { frameRate: 30 },
       audio: false
@@ -756,11 +789,17 @@ async function flushPendingCandidates(peerId, peer) {
 }
 
 function showRoomLink() {
-  const url = new URL("/watch", window.location.origin);
-  url.searchParams.set("roomId", roomId);
-  shareLink.value = url.toString();
+  shareLink.value = currentUser?.username
+    ? new URL(`/@${currentUser.username}/live`, window.location.origin).toString()
+    : legacyWatchUrl(roomId).toString();
   linkBox.classList.remove("hidden");
   copyRoomLink();
+}
+
+function legacyWatchUrl(id) {
+  const url = new URL("/watch", window.location.origin);
+  url.searchParams.set("roomId", id);
+  return url;
 }
 
 async function copyRoomLink() {
@@ -916,8 +955,8 @@ function applyLanguage(nextLanguage) {
   if (skipHowToButton) skipHowToButton.textContent = t("skip");
   if (createAccountLink) createAccountLink.textContent = t("signIn");
   if (authEyebrow) authEyebrow.textContent = t("account");
-  if (authTitle) authTitle.textContent = t("authTitle");
-  if (authIntro) authIntro.textContent = t("authIntro");
+  if (authTitle) authTitle.textContent = t(authMode === "profile" ? "profileTitle" : "authTitle");
+  if (authIntro) authIntro.textContent = t(authMode === "profile" ? "profileIntro" : "authIntro");
   if (registerTab) registerTab.textContent = t("register");
   if (loginTab) loginTab.textContent = t("login");
   if (registerNameLabel) registerNameLabel.textContent = t("name");
@@ -927,8 +966,13 @@ function applyLanguage(nextLanguage) {
   if (registerPasswordLabel) registerPasswordLabel.textContent = t("password");
   if (loginEmailLabel) loginEmailLabel.textContent = t("email");
   if (loginPasswordLabel) loginPasswordLabel.textContent = t("password");
+  if (profileNameLabel) profileNameLabel.textContent = t("name");
+  if (profileUsernameLabel) profileUsernameLabel.textContent = t("username");
+  if (profileUsernameHint) profileUsernameHint.textContent = t("usernameHint");
   if (registerButton) registerButton.textContent = t("signIn");
   if (loginButton) loginButton.textContent = t("login");
+  if (profileButton) profileButton.textContent = t("profileSave");
+  if (logoutButton) logoutButton.textContent = t("logout");
   setEmptyTitle(emptyTitleKey);
 
   quickCard.setAttribute("aria-label", t("controlLabel"));
@@ -963,22 +1007,87 @@ function format(key, values) {
 
 async function toggleFullscreen() {
   try {
-    if (document.fullscreenElement) {
-      await document.exitFullscreen();
+    if (isFullscreen()) {
+      await exitFullscreenMode();
       return;
     }
-    await screenFrame.requestFullscreen();
-  } catch {
-    setStatusKey("cannotStart");
+
+    await enterFullscreenMode();
+  } catch (error) {
+    console.warn("Fullscreen failed", error);
+    setPseudoFullscreen(true);
   }
 }
 
 function updateFullscreenButton() {
-  const isFullscreen = Boolean(document.fullscreenElement);
-  fullscreenButton.setAttribute("aria-label", t(isFullscreen ? "exitFullscreen" : "fullscreen"));
-  fullscreenButton.title = t(isFullscreen ? "exitFullscreen" : "fullscreen");
-  fullscreenButton.querySelector(".enter-fullscreen").classList.toggle("hidden", isFullscreen);
-  fullscreenButton.querySelector(".exit-fullscreen").classList.toggle("hidden", !isFullscreen);
+  const fullscreenActive = isFullscreen();
+  fullscreenButton.setAttribute("aria-label", t(fullscreenActive ? "exitFullscreen" : "fullscreen"));
+  fullscreenButton.title = t(fullscreenActive ? "exitFullscreen" : "fullscreen");
+  fullscreenButton.querySelector(".enter-fullscreen").classList.toggle("hidden", fullscreenActive);
+  fullscreenButton.querySelector(".exit-fullscreen").classList.toggle("hidden", !fullscreenActive);
+}
+
+async function enterFullscreenMode() {
+  const request =
+    screenFrame.requestFullscreen ||
+    screenFrame.webkitRequestFullscreen ||
+    screenFrame.webkitRequestFullScreen ||
+    screenFrame.msRequestFullscreen;
+
+  if (request) {
+    await request.call(screenFrame);
+    updateFullscreenButton();
+    return;
+  }
+
+  const videoFullscreen = video.webkitEnterFullscreen || video.webkitEnterFullScreen;
+  if (videoFullscreen && video.srcObject && video.classList.contains("is-playing")) {
+    videoFullscreen.call(video);
+    updateFullscreenButton();
+    return;
+  }
+
+  setPseudoFullscreen(true);
+}
+
+async function exitFullscreenMode() {
+  const exit =
+    document.exitFullscreen ||
+    document.webkitExitFullscreen ||
+    document.webkitCancelFullScreen ||
+    document.msExitFullscreen;
+
+  if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) {
+    await exit?.call(document);
+  }
+
+  if (video.webkitDisplayingFullscreen) {
+    const exitVideoFullscreen = video.webkitExitFullscreen || video.webkitExitFullScreen;
+    exitVideoFullscreen?.call(video);
+  }
+
+  setPseudoFullscreen(false);
+  updateFullscreenButton();
+}
+
+function isFullscreen() {
+  return Boolean(
+    document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      document.msFullscreenElement ||
+      video.webkitDisplayingFullscreen ||
+      isPseudoFullscreen()
+  );
+}
+
+function isPseudoFullscreen() {
+  return screenFrame.classList.contains("is-pseudo-fullscreen");
+}
+
+function setPseudoFullscreen(enabled) {
+  screenFrame.classList.toggle("is-pseudo-fullscreen", enabled);
+  document.body.classList.toggle("pseudo-fullscreen-open", enabled);
+  updateFullscreenButton();
 }
 
 function registerServiceWorker() {
@@ -997,6 +1106,9 @@ async function loadSession() {
     if (data.user) {
       currentUser = data.user;
       updateAccountUi();
+      if (!authView?.classList.contains("hidden")) {
+        setAuthMode("profile");
+      }
     }
   } catch {
     // Tracking is best-effort; the sharing flow should never depend on it.
@@ -1026,7 +1138,41 @@ async function loginAccount(event) {
   await submitAuth("/api/auth/login", payload, "authLoginSuccess");
 }
 
-async function submitAuth(url, payload, successKey) {
+async function updateProfile(event) {
+  event.preventDefault();
+  await submitAuth(
+    "/api/auth/profile",
+    {
+      name: profileNameInput?.value || "",
+      username: profileUsernameInput?.value || ""
+    },
+    "profileSuccess",
+    false
+  );
+}
+
+async function logoutAccount() {
+  setAuthMessage("");
+  try {
+    const response = await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin"
+    });
+    if (!response.ok) {
+      setAuthMessage(t("authError"));
+      return;
+    }
+    currentUser = null;
+    updateAccountUi();
+    setAuthMessage(t("logoutSuccess"));
+    trackEvent("user_logged_out");
+    window.setTimeout(closeAuthModal, 450);
+  } catch {
+    setAuthMessage(t("authError"));
+  }
+}
+
+async function submitAuth(url, payload, successKey, closeOnSuccess = true) {
   setAuthMessage("");
   try {
     const response = await fetch(url, {
@@ -1043,13 +1189,22 @@ async function submitAuth(url, payload, successKey) {
     currentUser = data.user;
     updateAccountUi();
     setAuthMessage(t(successKey));
-    trackEvent(url.endsWith("/register") ? "user_registered" : "user_logged_in");
-    window.setTimeout(() => {
-      closeAuthModal();
-    }, 650);
+    trackEvent(authEventName(url));
+    if (closeOnSuccess) {
+      window.setTimeout(() => {
+        closeAuthModal();
+      }, 650);
+    }
   } catch {
     setAuthMessage(t("authError"));
   }
+}
+
+function authEventName(url) {
+  if (url.endsWith("/register")) return "user_registered";
+  if (url.endsWith("/login")) return "user_logged_in";
+  if (url.endsWith("/profile")) return "profile_updated";
+  return "auth_updated";
 }
 
 function updateAccountUi() {
@@ -1057,6 +1212,7 @@ function updateAccountUi() {
   if (!accountName || !accountButton) return;
   accountName.textContent = displayName;
   accountButton.title = currentUser ? t("manage") : t("signIn");
+  if (accountLabel) accountLabel.textContent = currentUser ? t("account") : t("session");
 }
 
 function displayCurrentUser() {
@@ -1069,6 +1225,11 @@ function socketProfile() {
     username: currentUser.username || null,
     name: currentUser.name || null
   };
+}
+
+function getLiveRoomFromPath() {
+  const match = location.pathname.match(/^\/@([a-z0-9_]{3,40})\/live\/?$/i);
+  return match ? match[1].toLowerCase() : null;
 }
 
 function setupCurrentRoute() {
@@ -1084,8 +1245,9 @@ function setupCurrentRoute() {
 function openAuthModal(mode = "register", pushRoute = false) {
   authView?.classList.remove("hidden");
   document.body.classList.add("modal-open");
-  setAuthMode(mode);
+  setAuthMode(currentUser ? "profile" : mode);
   if (pushRoute && location.pathname !== "/account") {
+    authReturnPath = `${location.pathname}${location.search}`;
     history.pushState({}, "", "/account");
   }
 }
@@ -1094,16 +1256,29 @@ function closeAuthModal() {
   authView?.classList.add("hidden");
   document.body.classList.remove("modal-open");
   if (location.pathname === "/account") {
-    history.pushState({}, "", "/");
+    history.pushState({}, "", authReturnPath || "/");
   }
 }
 
 function setAuthMode(mode) {
+  authMode = mode;
   const isRegister = mode === "register";
+  const isProfile = mode === "profile";
   registerForm?.classList.toggle("hidden", !isRegister);
-  loginForm?.classList.toggle("hidden", isRegister);
+  loginForm?.classList.toggle("hidden", isRegister || isProfile);
+  profileForm?.classList.toggle("hidden", !isProfile);
+  document.querySelector(".auth-tabs")?.classList.toggle("hidden", isProfile);
   registerTab?.classList.toggle("active", isRegister);
-  loginTab?.classList.toggle("active", !isRegister);
+  loginTab?.classList.toggle("active", mode === "login");
+  if (isProfile) {
+    if (authTitle) authTitle.textContent = t("profileTitle");
+    if (authIntro) authIntro.textContent = t("profileIntro");
+    if (profileNameInput) profileNameInput.value = currentUser?.name || "";
+    if (profileUsernameInput) profileUsernameInput.value = currentUser?.username ? `@${currentUser.username}` : "";
+  } else {
+    if (authTitle) authTitle.textContent = t("authTitle");
+    if (authIntro) authIntro.textContent = t("authIntro");
+  }
   setAuthMessage("");
 }
 

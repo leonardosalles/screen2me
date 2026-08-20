@@ -33,6 +33,14 @@ export class AuthController {
     return { persistence: this.auth.persistenceEnabled, user };
   }
 
+  @Post("profile")
+  @HttpCode(200)
+  async profile(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() body: unknown) {
+    const sessionId = this.sessions.getSessionId(req, res);
+    const user = await this.auth.updateProfile(sessionId, body);
+    return { persistence: this.auth.persistenceEnabled, user };
+  }
+
   @Post("logout")
   @HttpCode(200)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
