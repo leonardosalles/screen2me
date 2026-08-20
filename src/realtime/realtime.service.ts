@@ -133,18 +133,30 @@ export class RealtimeService implements OnModuleDestroy {
     room.host = socket;
     this.rooms.set(roomId, room);
 
+    const readyViewers: Client[] = [];
+    for (const viewer of [...room.viewers]) {
+      if (!(await this.ensureViewerUsage(viewer, roomId))) {
+        room.viewers.delete(viewer);
+        continue;
+      }
+      readyViewers.push(viewer);
+      this.send(viewer, {
+        type: "host-ready",
+        roomId,
+        hostId: socket.id,
+        host: this.publicUser(socket),
+        trial: this.trialPayload(viewer)
+      });
+    }
+
     this.send(socket, {
       type: "room-hosted",
       roomId,
-      viewers: [...room.viewers].map((viewer) => viewer.id),
+      viewers: readyViewers.map((viewer) => viewer.id),
       host: this.publicUser(socket),
       audience: this.audience(room),
       trial: this.trialPayload(socket)
     });
-
-    for (const viewer of room.viewers) {
-      this.send(viewer, { type: "host-ready", hostId: socket.id, host: this.publicUser(socket) });
-    }
     this.broadcastAudience(room);
   }
 
@@ -154,17 +166,18 @@ export class RealtimeService implements OnModuleDestroy {
       return;
     }
 
+    const room = this.rooms.get(roomId) || { host: null, viewers: new Set<Client>() };
+    const hostOnline = Boolean(room.host && room.host.readyState === WebSocket.OPEN);
+
     this.leaveRoom(socket);
     socket.role = "viewer";
     socket.roomId = roomId;
-    const usageStarted = await this.startUsage(socket, roomId, "viewer");
-    if (!usageStarted) {
+    if (hostOnline && !(await this.startUsage(socket, roomId, "viewer"))) {
       socket.role = null;
       socket.roomId = null;
       return;
     }
 
-    const room = this.rooms.get(roomId) || { host: null, viewers: new Set<Client>() };
     room.viewers.add(socket);
     this.rooms.set(roomId, room);
 
@@ -172,13 +185,13 @@ export class RealtimeService implements OnModuleDestroy {
       type: "viewer-joined",
       roomId,
       viewerId: socket.id,
-      hostOnline: Boolean(room.host && room.host.readyState === WebSocket.OPEN),
+      hostOnline,
       host: room.host ? this.publicUser(room.host) : null,
       audience: this.audience(room),
       trial: this.trialPayload(socket)
     });
 
-    if (room.host && room.host.readyState === WebSocket.OPEN) {
+    if (hostOnline && room.host) {
       this.send(room.host, { type: "viewer-ready", viewerId: socket.id, viewer: this.publicUser(socket) });
     }
     this.broadcastAudience(room);
@@ -277,6 +290,16 @@ export class RealtimeService implements OnModuleDestroy {
       limitSeconds: ANONYMOUS_LIMIT_SECONDS,
       endsAt: socket.trialEndsAt
     };
+  }
+
+  private async ensureViewerUsage(socket: Client, roomId: string) {
+    if (socket.role !== "viewer") return false;
+    if (socket.user) {
+      if (socket.usageId || socket.usageStartedAt) return true;
+      return this.startUsage(socket, roomId, "viewer");
+    }
+    if (socket.usageStartedAt) return true;
+    return this.startUsage(socket, roomId, "viewer");
   }
 
   private async startUsage(socket: Client, roomId: string, role: "host" | "viewer") {

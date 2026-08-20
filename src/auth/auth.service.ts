@@ -34,6 +34,29 @@ export class AuthService {
     });
   }
 
+  async publicUserByUsername(username: string) {
+    const cleanUsername = username.replace(/^@+/, "").toLowerCase();
+    if (!/^[a-z0-9_]{3,40}$/.test(cleanUsername)) return null;
+
+    if (!this.prisma.enabled) {
+      const user = this.memoryUsersByUsername.get(cleanUsername);
+      return user
+        ? { id: user.id, username: user.username, name: user.name, displayName: user.username ? `@${user.username}` : user.name }
+        : null;
+    }
+
+    const user = await this.prisma.user
+      .findUnique({
+        where: { username: cleanUsername },
+        select: { id: true, username: true, name: true }
+      })
+      .catch(() => null);
+
+    return user
+      ? { id: user.id, username: user.username, name: user.name, displayName: user.username ? `@${user.username}` : user.name }
+      : null;
+  }
+
   async register(sessionId: string, input: unknown) {
     const body = this.object(input);
     const email = this.email(body.email);

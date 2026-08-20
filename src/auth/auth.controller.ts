@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Inject, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req, Res } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { SessionService } from "../session/session.service";
 import { AuthService } from "./auth.service";
@@ -15,6 +15,11 @@ export class AuthController {
     const sessionId = this.sessions.getSessionId(req, res);
     const user = await this.auth.currentUser(sessionId);
     return { persistence: this.auth.persistenceEnabled, user };
+  }
+
+  @Get("users/:username")
+  async user(@Param("username") username: string) {
+    return { user: await this.auth.publicUserByUsername(username || "") };
   }
 
   @Post("register")

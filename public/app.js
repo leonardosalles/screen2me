@@ -138,7 +138,7 @@ const translations = {
     manage: "Editar",
     accountCtaEyebrow: "Conta gratuita",
     accountCtaTitle: "Compartilhe sem perder contexto",
-    accountCtaText: "Guarde historico, reserve um @username e use seu link fixo /@username/live. O app continua gratuito.",
+    accountCtaText: "Guarde historico, reserve um @username e use seu link fixo /@username. O app continua gratuito.",
     trialLabel: "Acesso anonimo",
     trialText: "Sem conta, transmissao e visualizacao duram ate 15 minutos. Crie uma conta gratuita para continuar.",
     trialCreateAccount: "Criar conta",
@@ -156,7 +156,7 @@ const translations = {
     emptyWaiting: "Aguardando o apresentador iniciar.",
     emptyNoHost: "Nao tem ninguem transmitindo nessa sala agora. A aba do apresentador precisa continuar aberta.",
     emptyConnectingVideo: "Conectando video ponto a ponto...",
-    emptyNoFrames: "Conectou, mas nenhum frame chegou ainda. Peca para o apresentador escolher uma tela ou janela real.",
+    emptyNoFrames: "Conectou, mas nenhum frame chegou ainda. Tente recarregar ou peca para o apresentador trocar a janela compartilhada.",
     emptyReturn: "Aguardando o apresentador voltar.",
     fullscreen: "Tela cheia",
     exitFullscreen: "Sair da tela cheia",
@@ -170,13 +170,13 @@ const translations = {
     stepOneTitle: "Inicie uma sala",
     stepOneText: "Clique em Compartilhar e escolha uma tela, janela ou aba.",
     stepTwoTitle: "Envie o link",
-    stepTwoText: "Copie o link da sala ou seu /@username/live e mande para o grupo.",
+    stepTwoText: "Copie o link da sala ou seu /@username e mande para o grupo.",
     stepThreeTitle: "Fique ao vivo",
     stepThreeText: "Mantenha esta aba aberta enquanto as pessoas assistem.",
     benefitHistoryTitle: "Historico de salas",
     benefitHistoryText: "Encontre salas e sessoes anteriores sem procurar em conversas.",
     benefitUsernameTitle: "Link fixo",
-    benefitUsernameText: "Reserve um username para um link pessoal como screen2.me/@leonardo/live.",
+    benefitUsernameText: "Reserve um username para um link pessoal como screen2.me/@leonardo.",
     name: "Nome",
     email: "Email",
     username: "Username",
@@ -186,7 +186,7 @@ const translations = {
     login: "Entrar",
     account: "Conta",
     authTitle: "Reserve seu link fixo de compartilhamento",
-    authIntro: "Crie uma conta para guardar historico de salas e reservar um link como screen2.me/@leonardo/live.",
+    authIntro: "Crie uma conta para guardar historico de salas e reservar um link como screen2.me/@leonardo.",
     authSuccess: "Conta pronta. Voltando para o app...",
     authLoginSuccess: "Login feito. Voltando para o app...",
     profileTitle: "Edite seu perfil",
@@ -243,7 +243,7 @@ const translations = {
     manage: "Edit",
     accountCtaEyebrow: "Free account",
     accountCtaTitle: "Share without losing context",
-    accountCtaText: "Save room history, reserve an @username, and use your fixed /@username/live link. The app stays free.",
+    accountCtaText: "Save room history, reserve an @username, and use your fixed /@username link. The app stays free.",
     trialLabel: "Anonymous access",
     trialText: "Without an account, streaming and watching are limited to 15 minutes. Create a free account to continue.",
     trialCreateAccount: "Create account",
@@ -261,7 +261,7 @@ const translations = {
     emptyWaiting: "Waiting for the presenter to start.",
     emptyNoHost: "Nobody is presenting in this room right now. The presenter tab must stay open.",
     emptyConnectingVideo: "Connecting peer-to-peer video...",
-    emptyNoFrames: "Connected, but no frames arrived yet. Ask the presenter to choose a real screen or window.",
+    emptyNoFrames: "Connected, but no frames arrived yet. Try reloading or ask the presenter to switch the shared window.",
     emptyReturn: "Waiting for the presenter to come back.",
     fullscreen: "Fullscreen",
     exitFullscreen: "Exit fullscreen",
@@ -275,13 +275,13 @@ const translations = {
     stepOneTitle: "Start a room",
     stepOneText: "Click Share and choose a screen, window, or tab.",
     stepTwoTitle: "Send the link",
-    stepTwoText: "Copy the room link or your /@username/live and send it to your group.",
+    stepTwoText: "Copy the room link or your /@username and send it to your group.",
     stepThreeTitle: "Stay live",
     stepThreeText: "Keep this tab open while people are watching.",
     benefitHistoryTitle: "Room history",
     benefitHistoryText: "Find past rooms and sessions without digging through chats.",
     benefitUsernameTitle: "Fixed share link",
-    benefitUsernameText: "Reserve a username for a personal link like screen2.me/@leonardo/live.",
+    benefitUsernameText: "Reserve a username for a personal link like screen2.me/@leonardo.",
     name: "Name",
     email: "Email",
     username: "Username",
@@ -291,7 +291,7 @@ const translations = {
     login: "Login",
     account: "Account",
     authTitle: "Reserve your fixed sharing link",
-    authIntro: "Create an account to keep room history and claim a link like screen2.me/@leonardo/live.",
+    authIntro: "Create an account to keep room history and claim a link like screen2.me/@leonardo.",
     authSuccess: "Account ready. Taking you back to the app...",
     authLoginSuccess: "Logged in. Taking you back to the app...",
     profileTitle: "Edit your profile",
@@ -307,7 +307,7 @@ const translations = {
 };
 
 let language = getInitialLanguage();
-let roomId = params.get("roomId") || params.get("room") || getLiveRoomFromPath();
+let roomId = params.get("roomId") || params.get("room") || getUserRoomFromPath();
 let role = roomId || location.pathname === "/watch" ? "viewer" : "idle";
 let socket;
 let localStream;
@@ -474,6 +474,12 @@ async function connect() {
       hostDisplayName = message.host?.displayName || null;
       setStatus(hostDisplayName ? format("hostSharedBy", { name: hostDisplayName }) : t("connectingHost"));
       setStageSubtitle(hostDisplayName ? format("hostSharedBy", { name: hostDisplayName }) : "");
+      setMode("watchingMode");
+      setStage("stageReceived");
+      setBadge("remote");
+      setEmptyTitle("emptyViewerTitle");
+      setEmptyHint("emptyConnectingVideo");
+      setTrial(message.trial);
     }
 
     if (message.type === "host-left") {
@@ -548,6 +554,9 @@ async function startSharing() {
       video: { frameRate: 30 },
       audio: false
     });
+    for (const track of localStream.getVideoTracks()) {
+      track.contentHint = "detail";
+    }
     trackEvent("share_permission_granted");
 
     video.srcObject = null;
@@ -643,8 +652,9 @@ function stopSharing() {
 async function callViewer(viewerId) {
   const peer = createPeer(viewerId);
   localStream.getTracks().forEach((track) => peer.addTrack(track, localStream));
+  preferVp8(peer);
   const offer = await peer.createOffer();
-  await peer.setLocalDescription(offer);
+  await peer.setLocalDescription(preferVp8InDescription(offer));
   sendSignal(viewerId, peer.localDescription);
 }
 
@@ -655,8 +665,9 @@ async function handleSignal(from, signal) {
     hostId = from;
     await peer.setRemoteDescription(signal);
     await flushPendingCandidates(from, peer);
+    preferVp8(peer);
     const answer = await peer.createAnswer();
-    await peer.setLocalDescription(answer);
+    await peer.setLocalDescription(preferVp8InDescription(answer));
     sendSignal(from, peer.localDescription);
     return;
   }
@@ -707,21 +718,73 @@ function createPeer(peerId) {
   return peer;
 }
 
+function preferVp8(peer) {
+  if (!window.RTCRtpSender?.getCapabilities) return;
+  const capabilities = window.RTCRtpSender.getCapabilities("video");
+  const vp8 = capabilities?.codecs?.filter((codec) => codec.mimeType.toLowerCase() === "video/vp8") || [];
+  const rest = capabilities?.codecs?.filter((codec) => codec.mimeType.toLowerCase() !== "video/vp8") || [];
+  if (!vp8.length) return;
+
+  for (const transceiver of peer.getTransceivers()) {
+    if (transceiver.sender?.track?.kind === "video" || transceiver.receiver?.track?.kind === "video") {
+      transceiver.setCodecPreferences?.([...vp8, ...rest]);
+    }
+  }
+}
+
+function preferVp8InDescription(description) {
+  if (!description?.sdp) return description;
+  return {
+    type: description.type,
+    sdp: preferCodec(description.sdp, "video", "VP8")
+  };
+}
+
+function preferCodec(sdp, kind, codecName) {
+  const lines = sdp.split("\r\n");
+  const mLineIndex = lines.findIndex((line) => line.startsWith(`m=${kind}`));
+  if (mLineIndex === -1) return sdp;
+
+  const codecPayloads = [];
+  for (const line of lines) {
+    const match = line.match(new RegExp(`^a=rtpmap:(\\d+) ${codecName}/`, "i"));
+    if (match) codecPayloads.push(match[1]);
+  }
+  if (!codecPayloads.length) return sdp;
+
+  const parts = lines[mLineIndex].split(" ");
+  const header = parts.slice(0, 3);
+  const payloads = parts.slice(3);
+  const preferred = codecPayloads.filter((payload) => payloads.includes(payload));
+  const remaining = payloads.filter((payload) => !preferred.includes(payload));
+  lines[mLineIndex] = [...header, ...preferred, ...remaining].join(" ");
+  return lines.join("\r\n");
+}
+
 async function showRemoteStream(stream) {
   video.srcObject = stream;
   video.muted = true;
+  video.autoplay = true;
+  video.playsInline = true;
   video.classList.remove("is-playing");
   emptyState.classList.remove("hidden");
   setEmptyTitle("emptyViewerTitle");
   setEmptyHint("emptyConnectingVideo");
 
+  video.onloadedmetadata = () => playRemoteVideo();
+  video.onresize = () => waitForVideoFrame();
+  await playRemoteVideo();
+
+  waitForVideoFrame();
+}
+
+async function playRemoteVideo() {
   try {
     await video.play();
   } catch (error) {
     console.error("Remote video play failed", error);
+    window.setTimeout(() => video.play().catch(() => {}), 350);
   }
-
-  waitForVideoFrame();
 }
 
 function waitForVideoFrame() {
@@ -750,10 +813,15 @@ function waitForVideoFrame() {
       return;
     }
 
-    if (Date.now() - startedAt > 5000) {
+    if (Date.now() - startedAt > 7000) {
       window.clearInterval(interval);
       setStatusKey("watching");
       setEmptyHint("emptyNoFrames");
+      trackEvent("video_no_frames", {
+        readyState: video.readyState,
+        networkState: video.networkState,
+        peerCount: peers.size
+      });
     }
   }, 250);
 }
@@ -790,7 +858,7 @@ async function flushPendingCandidates(peerId, peer) {
 
 function showRoomLink() {
   shareLink.value = currentUser?.username
-    ? new URL(`/@${currentUser.username}/live`, window.location.origin).toString()
+    ? new URL(`/@${currentUser.username}`, window.location.origin).toString()
     : legacyWatchUrl(roomId).toString();
   linkBox.classList.remove("hidden");
   copyRoomLink();
@@ -1227,8 +1295,8 @@ function socketProfile() {
   };
 }
 
-function getLiveRoomFromPath() {
-  const match = location.pathname.match(/^\/@([a-z0-9_]{3,40})\/live\/?$/i);
+function getUserRoomFromPath() {
+  const match = location.pathname.match(/^\/@([a-z0-9_]{3,40})(?:\/live)?\/?$/i);
   return match ? match[1].toLowerCase() : null;
 }
 
