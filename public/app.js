@@ -18,9 +18,29 @@ const stageTitle = document.querySelector("#stageTitle");
 const stageSubtitle = document.querySelector("#stageSubtitle");
 const connectionBadge = document.querySelector("#connectionBadge");
 const fullscreenButton = document.querySelector("#fullscreenButton");
+const stage = document.querySelector(".stage");
 const screenFrame = document.querySelector(".screen-frame");
+const studio = document.querySelector(".studio");
+const studioHero = document.querySelector("#studioHero");
+const presenterPanel = document.querySelector("#presenterPanel");
+const presenterLiveStatus = document.querySelector("#presenterLiveStatus");
+const presenterStatusTitle = document.querySelector("#presenterStatusTitle");
+const presenterStatusText = document.querySelector("#presenterStatusText");
+const presenterTipOneTitle = document.querySelector("#presenterTipOneTitle");
+const presenterTipOneText = document.querySelector("#presenterTipOneText");
+const presenterTipTwoTitle = document.querySelector("#presenterTipTwoTitle");
+const presenterTipTwoText = document.querySelector("#presenterTipTwoText");
+const presenterTipThreeTitle = document.querySelector("#presenterTipThreeTitle");
+const presenterTipThreeText = document.querySelector("#presenterTipThreeText");
+const heroKicker = document.querySelector("#heroKicker");
+const heroTitle = document.querySelector("#heroTitle");
+const heroText = document.querySelector("#heroText");
+const languagePicker = document.querySelector("#languagePicker");
+const languageButton = document.querySelector("#languageButton");
 const languageFlag = document.querySelector("#languageFlag");
-const languageSelect = document.querySelector("#languageSelect");
+const languageLabel = document.querySelector("#languageLabel");
+const languageMenu = document.querySelector("#languageMenu");
+const languageOptions = document.querySelectorAll(".language-option");
 const linkLabel = document.querySelector("#linkLabel");
 const roomStatLabel = document.querySelector("#roomStatLabel");
 const viewerStatLabel = document.querySelector("#viewerStatLabel");
@@ -28,6 +48,7 @@ const madeByNote = document.querySelector("#madeByNote");
 const accountButton = document.querySelector("#accountButton");
 const accountLabel = document.querySelector("#accountLabel");
 const accountName = document.querySelector("#accountName");
+const accountCta = document.querySelector("#accountCta");
 const accountCtaEyebrow = document.querySelector("#accountCtaEyebrow");
 const accountCtaTitle = document.querySelector("#accountCtaTitle");
 const accountCtaText = document.querySelector("#accountCtaText");
@@ -82,6 +103,7 @@ const loginButton = document.querySelector("#loginButton");
 const profileButton = document.querySelector("#profileButton");
 const logoutButton = document.querySelector("#logoutButton");
 const authMessage = document.querySelector("#authMessage");
+const toastStack = document.querySelector("#toastStack");
 const registerNameInput = document.querySelector("#registerNameInput");
 const usernameInput = document.querySelector("#usernameInput");
 const registerEmailInput = document.querySelector("#registerEmailInput");
@@ -90,11 +112,28 @@ const loginEmailInput = document.querySelector("#loginEmailInput");
 const loginPasswordInput = document.querySelector("#loginPasswordInput");
 const profileNameInput = document.querySelector("#profileNameInput");
 const profileUsernameInput = document.querySelector("#profileUsernameInput");
+const roomPasswordModal = document.querySelector("#roomPasswordModal");
+const roomPasswordForm = document.querySelector("#roomPasswordForm");
+const roomPasswordEyebrow = document.querySelector("#roomPasswordEyebrow");
+const roomPasswordTitle = document.querySelector("#roomPasswordTitle");
+const roomPasswordIntro = document.querySelector("#roomPasswordIntro");
+const watchPasswordLabel = document.querySelector("#watchPasswordLabel");
+const watchPasswordInput = document.querySelector("#watchPasswordInput");
+const watchPasswordButton = document.querySelector("#watchPasswordButton");
+const roomPasswordMessage = document.querySelector("#roomPasswordMessage");
+const roomProtectionCard = document.querySelector("#roomProtectionCard");
+const sharePasswordEnabledInput = document.querySelector("#sharePasswordEnabledInput");
+const sharePasswordEnabledLabel = document.querySelector("#sharePasswordEnabledLabel");
+const sharePasswordField = document.querySelector("#sharePasswordField");
+const sharePasswordLabel = document.querySelector("#sharePasswordLabel");
+const sharePasswordInput = document.querySelector("#sharePasswordInput");
 const appNav = document.querySelector(".app-nav");
 
 const params = new URLSearchParams(window.location.search);
 const debugEnabled = params.get("debug") === "true";
 const highQualityEnabled = params.get("quality") === "high";
+let roomPassword = params.get("password") || "";
+let clientCryptoKeyPromise;
 const STREAM_VIDEO_WIDTH = highQualityEnabled ? 2560 : 1920;
 const STREAM_VIDEO_HEIGHT = highQualityEnabled ? 1440 : 1080;
 const STREAM_FRAME_RATE = highQualityEnabled ? 60 : 30;
@@ -122,7 +161,7 @@ const translations = {
     watchingUserScreen: "Voce esta assistindo a tela de {name}.",
     hostLeft: "O apresentador saiu.",
     trialEnded: "Seu tempo anonimo acabou. Crie uma conta para continuar.",
-    connectionLost: "Conexao caiu. Recarregue a pagina.",
+    connectionLost: "Reconectando...",
     watching: "Assistindo transmissao.",
     copied: "Link copiado. Pode mandar para a galera.",
     ended: "Transmissao encerrada.",
@@ -140,13 +179,26 @@ const translations = {
     room: "Sala",
     noRoom: "nenhuma",
     audience: "Publico",
-    session: "Sessao",
+    session: "Conta",
     guest: "Visitante",
     signIn: "Criar conta",
     manage: "Editar",
     accountCtaEyebrow: "Conta gratuita",
     accountCtaTitle: "Compartilhe sem perder contexto",
-    accountCtaText: "Guarde historico, reserve um @username e use seu link fixo /@username. O app continua gratuito.",
+    accountCtaText: "Guarde historico, reserve um @username, use seu link fixo e proteja a sala com senha. O app continua gratuito.",
+    heroKicker: "Compartilhamento pelo navegador",
+    heroTitle: "Compartilhe antes da call esfriar.",
+    heroText: "Abra uma sala, comece a transmitir e envie um link limpo. Sem instalacao, sem setup de reuniao.",
+    presenterReadyTitle: "Pronto quando voce estiver",
+    presenterReadyText: "Use o cockpit ao lado para iniciar e envie o link para a galera.",
+    presenterLiveTitle: "Voce esta ao vivo",
+    presenterLiveText: "Ao vivo. Copie o link e mantenha esta aba aberta enquanto a galera assiste.",
+    presenterTipOneTitle: "Escolha a fonte certa",
+    presenterTipOneText: "Compartilhe a tela inteira ou uma janela especifica para a captura mais estavel.",
+    presenterTipTwoTitle: "Envie um link limpo",
+    presenterTipTwoText: "Com login, voce usa sempre seu link fixo /@username.",
+    presenterTipThreeTitle: "Mantenha a aba aberta",
+    presenterTipThreeText: "Esta aba coordena a sala enquanto sua tela esta ao vivo.",
     trialLabel: "Acesso anonimo",
     trialText: "Sem conta, transmissao e visualizacao duram ate 15 minutos. Crie uma conta gratuita para continuar.",
     trialCreateAccount: "Criar conta",
@@ -159,7 +211,6 @@ const translations = {
     stagePaused: "Transmissao pausada",
     emptyTitle: "Um clique e o link esta pronto",
     emptyIdle: "Escolha uma tela, janela ou aba para comecar.",
-    emptyHostLive: "Sua tela esta sendo enviada. O preview local fica oculto para evitar o efeito infinito. Para mais estabilidade, compartilhe Tela inteira ou uma janela, nao esta aba.",
     emptyViewerTitle: "Aguardando",
     emptyWaiting: "Aguardando o apresentador iniciar.",
     emptyNoHost: "Nao tem ninguem transmitindo nessa sala agora. A aba do apresentador precisa continuar aberta.",
@@ -185,11 +236,11 @@ const translations = {
     benefitHistoryTitle: "Historico de salas",
     benefitHistoryText: "Encontre salas e sessoes anteriores sem procurar em conversas.",
     benefitUsernameTitle: "Link fixo",
-    benefitUsernameText: "Reserve um username para um link pessoal como screen2.me/@leonardo.",
+    benefitUsernameText: "Reserve um username para um link pessoal como screen2.me/@leonardo, com senha opcional.",
     name: "Nome",
     email: "Email",
     username: "Username",
-    usernameHint: "Use letras, numeros ou underscore. Ex: @fulano",
+    usernameHint: "Use letras, numeros ou underscore. Ex: fulano",
     password: "Senha",
     register: "Criar conta",
     login: "Entrar",
@@ -202,9 +253,31 @@ const translations = {
     profileIntro: "Atualize o nome exibido e o @username do seu link fixo.",
     profileSave: "Salvar perfil",
     profileSuccess: "Perfil atualizado.",
+    roomPasswordEnabled: "Exigir senha para assistir minha sala",
+    sharePasswordEnabled: "Proteger com senha",
+    roomPassword: "Senha da sala",
+    sharePasswordPlaceholder: "Senha opcional da sala",
+    roomPasswordHint: "Links podem incluir ?password=123 ou viewers precisam informar a senha antes de entrar.",
+    roomPasswordRequiredTitle: "Informe a senha da sala",
+    roomPasswordRequiredIntro: "Esta transmissao esta protegida pelo apresentador.",
+    roomPasswordRequiredEyebrow: "Sala protegida",
+    roomPasswordSubmit: "Assistir transmissao",
+    roomPasswordInvalid: "Senha incorreta. Tente novamente.",
+    roomPasswordRequiredStatus: "Esta sala pede senha para assistir.",
     logout: "Sair",
     logoutSuccess: "Voce saiu da conta.",
     authError: "Nao foi possivel concluir. Confira os dados e tente novamente.",
+    actionSuccess: "Pronto",
+    actionError: "Algo deu errado",
+    shareStartedToast: "Transmissao iniciada.",
+    shareStoppedToast: "Transmissao encerrada.",
+    linkCopiedToast: "Link copiado.",
+    loginToast: "Login feito.",
+    registerToast: "Conta criada.",
+    profileToast: "Perfil salvo.",
+    logoutToast: "Logout feito.",
+    passwordSavedToast: "Senha da sala atualizada.",
+    passwordRequiredToast: "Digite a senha antes de compartilhar para gerar o link protegido.",
     skip: "Pular",
     continue: "Continuar"
   },
@@ -230,7 +303,7 @@ const translations = {
     watchingUserScreen: "You are watching {name}'s screen.",
     hostLeft: "The presenter left.",
     trialEnded: "Your anonymous time is up. Create an account to continue.",
-    connectionLost: "Connection dropped. Reload the page.",
+    connectionLost: "Reconnecting...",
     watching: "Watching stream.",
     copied: "Link copied. Send it to the group.",
     ended: "Stream ended.",
@@ -248,13 +321,26 @@ const translations = {
     room: "Room",
     noRoom: "none",
     audience: "Audience",
-    session: "Session",
+    session: "Account",
     guest: "Guest",
     signIn: "Create account",
     manage: "Edit",
     accountCtaEyebrow: "Free account",
     accountCtaTitle: "Share without losing context",
-    accountCtaText: "Save room history, reserve an @username, and use your fixed /@username link. The app stays free.",
+    accountCtaText: "Save room history, reserve an @username, use your fixed link, and protect your room with a password. The app stays free.",
+    heroKicker: "Browser screen sharing",
+    heroTitle: "Share before the call gets cold.",
+    heroText: "Open a room, start broadcasting, and send one clean link. No install, no meeting setup.",
+    presenterReadyTitle: "Ready when you are",
+    presenterReadyText: "Use the cockpit on the right to start sharing, then send the link to your group.",
+    presenterLiveTitle: "You are live",
+    presenterLiveText: "Live. Copy the link and keep this tab open while people watch.",
+    presenterTipOneTitle: "Choose the right source",
+    presenterTipOneText: "Share the entire screen or a specific window for the most stable capture.",
+    presenterTipTwoTitle: "Send one clean link",
+    presenterTipTwoText: "Logged-in users can reuse their fixed /@username link every time.",
+    presenterTipThreeTitle: "Keep this tab open",
+    presenterTipThreeText: "This browser tab coordinates the room while your screen is live.",
     trialLabel: "Anonymous access",
     trialText: "Without an account, streaming and watching are limited to 15 minutes. Create a free account to continue.",
     trialCreateAccount: "Create account",
@@ -267,7 +353,6 @@ const translations = {
     stagePaused: "Stream paused",
     emptyTitle: "One click and the link is ready",
     emptyIdle: "Choose a screen, window, or tab to start.",
-    emptyHostLive: "Your screen is being sent. Local preview stays hidden to avoid the infinite mirror. For better stability, share Entire Screen or a window, not this tab.",
     emptyViewerTitle: "Waiting",
     emptyWaiting: "Waiting for the presenter to start.",
     emptyNoHost: "Nobody is presenting in this room right now. The presenter tab must stay open.",
@@ -293,11 +378,11 @@ const translations = {
     benefitHistoryTitle: "Room history",
     benefitHistoryText: "Find past rooms and sessions without digging through chats.",
     benefitUsernameTitle: "Fixed share link",
-    benefitUsernameText: "Reserve a username for a personal link like screen2.me/@leonardo.",
+    benefitUsernameText: "Reserve a username for a personal link like screen2.me/@leonardo, with an optional password.",
     name: "Name",
     email: "Email",
     username: "Username",
-    usernameHint: "Use letters, numbers, or underscores. Ex: @alex",
+    usernameHint: "Use letters, numbers, or underscores. Ex: alex",
     password: "Password",
     register: "Register",
     login: "Login",
@@ -310,9 +395,31 @@ const translations = {
     profileIntro: "Update your display name and fixed-link @username.",
     profileSave: "Save profile",
     profileSuccess: "Profile updated.",
+    roomPasswordEnabled: "Require password to watch my room",
+    sharePasswordEnabled: "Protect with password",
+    roomPassword: "Room password",
+    sharePasswordPlaceholder: "Optional room password",
+    roomPasswordHint: "Share links can include ?password=123 or viewers will be asked before joining.",
+    roomPasswordRequiredTitle: "Enter the room password",
+    roomPasswordRequiredIntro: "This stream is protected by the presenter.",
+    roomPasswordRequiredEyebrow: "Protected room",
+    roomPasswordSubmit: "Watch stream",
+    roomPasswordInvalid: "Wrong password. Try again.",
+    roomPasswordRequiredStatus: "This room requires a password to watch.",
     logout: "Logout",
     logoutSuccess: "You are logged out.",
     authError: "Could not complete. Check your details and try again.",
+    actionSuccess: "Done",
+    actionError: "Something went wrong",
+    shareStartedToast: "Stream started.",
+    shareStoppedToast: "Stream stopped.",
+    linkCopiedToast: "Link copied.",
+    loginToast: "Logged in.",
+    registerToast: "Account created.",
+    profileToast: "Profile saved.",
+    logoutToast: "Logged out.",
+    passwordSavedToast: "Room password updated.",
+    passwordRequiredToast: "Enter the password before sharing to generate the protected link.",
     skip: "Skip",
     continue: "Continue"
   }
@@ -322,6 +429,9 @@ let language = getInitialLanguage();
 let roomId = params.get("roomId") || params.get("room") || getUserRoomFromPath();
 let role = roomId || location.pathname === "/watch" ? "viewer" : "idle";
 let socket;
+let reconnectTimer;
+let reloadTimer;
+let pageIsUnloading = false;
 let localStream;
 let hostId;
 let currentUser = null;
@@ -365,9 +475,21 @@ shareButton.addEventListener("click", startSharing);
 stopButton.addEventListener("click", stopSharing);
 copyButton.addEventListener("click", copyRoomLink);
 fullscreenButton.addEventListener("click", toggleFullscreen);
-languageSelect.addEventListener("change", () => applyLanguage(languageSelect.value));
+languageButton?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  toggleLanguageMenu();
+});
+for (const option of languageOptions) {
+  option.addEventListener("click", () => {
+    applyLanguage(option.dataset.language);
+    closeLanguageMenu();
+  });
+}
+document.addEventListener("click", (event) => {
+  if (!languagePicker?.contains(event.target)) closeLanguageMenu();
+});
 accountButton?.addEventListener("click", () => {
-  openAuthModal(currentUser ? "profile" : "register", true);
+  openAuthModal(currentUser ? "profile" : "login", true);
 });
 closeHowToButton?.addEventListener("click", closeHowToModal);
 skipHowToButton?.addEventListener("click", closeHowToModal);
@@ -385,6 +507,8 @@ registerForm?.addEventListener("submit", registerAccount);
 loginForm?.addEventListener("submit", loginAccount);
 profileForm?.addEventListener("submit", updateProfile);
 logoutButton?.addEventListener("click", logoutAccount);
+roomPasswordForm?.addEventListener("submit", submitRoomPassword);
+sharePasswordEnabledInput?.addEventListener("change", updateSharePasswordField);
 document.addEventListener("fullscreenchange", updateFullscreenButton);
 document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
 document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -399,6 +523,7 @@ for (const eventName of ["loadstart", "loadedmetadata", "canplay", "playing", "w
   });
 }
 window.addEventListener("beforeunload", () => {
+  pageIsUnloading = true;
   if (socket?.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: "leave-room" }));
   }
@@ -421,8 +546,14 @@ async function connect() {
   socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`);
 
   socket.addEventListener("open", () => {
+    window.clearTimeout(reconnectTimer);
+    window.clearTimeout(reloadTimer);
     debugLog("socket:open", { role, roomId });
     setStatusKey(role === "viewer" ? "enteringRoom" : "readyToShare");
+    if (role === "host" && localStream && roomId) {
+      socket.send(JSON.stringify({ type: "host-room", roomId, profile: socketProfile() }));
+      return;
+    }
     if (role === "viewer") {
       if (!roomId) {
         setStatusKey("waitingHost");
@@ -433,7 +564,7 @@ async function connect() {
         setEmptyHint("emptyNoHost");
         return;
       }
-      socket.send(JSON.stringify({ type: "join-room", roomId, profile: socketProfile() }));
+      joinViewerRoom();
       shareButton.classList.add("hidden");
       setMode("watchingMode");
       roomLabel.textContent = roomId;
@@ -470,6 +601,7 @@ async function connect() {
       updateAudience(message.audience || []);
       setTrial(message.trial);
       setStageSubtitle(currentUser ? "" : t("trialText"));
+      updateSurfaceVisibility();
       trackEvent("room_hosted", { viewerCount: message.viewers.length });
       for (const viewerId of message.viewers) {
         await callViewer(viewerId);
@@ -517,6 +649,18 @@ async function connect() {
       setTrial(message.trial);
     }
 
+    if (message.type === "room-password-required") {
+      clearTrial();
+      setMode("waiting");
+      setStage("stagePaused");
+      setBadge("remote");
+      setEmptyTitle("emptyViewerTitle");
+      setEmptyHint("roomPasswordRequiredStatus");
+      setStatusKey("roomPasswordRequiredStatus");
+      openRoomPasswordModal(Boolean(message.invalid));
+      if (message.invalid) showToast("error", t("roomPasswordInvalid"));
+    }
+
     if (message.type === "host-left") {
       cleanupPeers();
       video.srcObject = null;
@@ -560,10 +704,26 @@ async function connect() {
     }
   });
 
-  socket.addEventListener("close", () => {
-    debugLog("socket:close", { role, roomId });
-    setStatusKey("connectionLost");
+  socket.addEventListener("close", (event) => {
+    debugLog("socket:close", { role, roomId, code: event.code, reason: event.reason });
+    if (pageIsUnloading || event.code === 4000) return;
+    scheduleSocketRecovery();
   });
+}
+
+function scheduleSocketRecovery() {
+  window.clearTimeout(reconnectTimer);
+  window.clearTimeout(reloadTimer);
+  setStatusKey("connectingServer");
+  socket = null;
+  reconnectTimer = window.setTimeout(() => {
+    connect();
+    reloadTimer = window.setTimeout(() => {
+      if (socket?.readyState !== WebSocket.OPEN) {
+        window.location.reload();
+      }
+    }, 2500);
+  }, 350);
 }
 
 function applyRouteState() {
@@ -585,6 +745,8 @@ function applyRouteState() {
     setViewerWatchingCopy(roomId ? `@${roomId}` : null, "enteringRoom");
     roomLabel.textContent = roomId || t("noRoom");
     updateViewerCount(0);
+    updateSurfaceVisibility();
+    updateShareProtectionUi();
     return;
   }
 
@@ -596,6 +758,8 @@ function applyRouteState() {
   setEmptyTitle("emptyTitle");
   setEmptyHint("emptyIdle");
   setStatusKey("ready");
+  updateSurfaceVisibility();
+  updateShareProtectionUi();
 }
 
 function setViewerWatchingCopy(name, fallbackKey = "enteringRoom") {
@@ -609,24 +773,101 @@ function setViewerWatchingCopy(name, fallbackKey = "enteringRoom") {
   setStageSubtitle(message);
 }
 
+function joinViewerRoom() {
+  if (role !== "viewer" || !roomId || socket?.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify({ type: "join-room", roomId, password: roomPassword, profile: socketProfile() }));
+}
+
+function openRoomPasswordModal(invalid = false) {
+  roomPasswordModal?.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  if (roomPasswordMessage) roomPasswordMessage.textContent = invalid ? t("roomPasswordInvalid") : "";
+  watchPasswordInput?.focus();
+}
+
+function closeRoomPasswordModal() {
+  roomPasswordModal?.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+}
+
+async function submitRoomPassword(event) {
+  event.preventDefault();
+  const typedPassword = watchPasswordInput?.value || "";
+  if (!typedPassword) {
+    if (roomPasswordMessage) roomPasswordMessage.textContent = t("roomPasswordRequiredStatus");
+    showToast("error", t("roomPasswordRequiredStatus"));
+    return;
+  }
+  try {
+    roomPassword = await encryptSecret(typedPassword);
+    closeRoomPasswordModal();
+    joinViewerRoom();
+  } catch {
+    showToast("error", t("authError"));
+  }
+}
+
+async function saveShareProtectionSettings() {
+  if (!currentUser) return true;
+  const roomPasswordEnabled = Boolean(sharePasswordEnabledInput?.checked);
+  const roomPasswordValue = sharePasswordInput?.value || "";
+  if (roomPasswordEnabled && !roomPasswordValue && !currentUser.roomPasswordShareToken) {
+    showToast("error", t("passwordRequiredToast"));
+    return false;
+  }
+
+  try {
+    const response = await fetch("/api/auth/profile", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        name: currentUser.name || "",
+        username: currentUser.username || "",
+        roomPasswordEnabled,
+        roomPassword: roomPasswordValue ? await encryptSecret(roomPasswordValue) : ""
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      showToast("error", data.message || t("authError"));
+      return false;
+    }
+    currentUser = data.user;
+    updateAccountUi();
+    updateShareProtectionUi();
+    if (roomPasswordValue) showToast("success", t("passwordSavedToast"));
+    return true;
+  } catch {
+    showToast("error", t("authError"));
+    return false;
+  }
+}
+
 async function startSharing() {
   trackEvent("share_clicked");
 
   if (!navigator.mediaDevices?.getDisplayMedia || !window.isSecureContext) {
     setStatusKey(location.protocol === "file:" ? "openFromServer" : "screenUnsupported");
+    showToast("error", t(location.protocol === "file:" ? "openFromServer" : "screenUnsupported"));
     trackEvent("share_blocked", { reason: "unsupported_context" });
     return;
   }
 
   const connected = await ensureSocketReady();
   if (!connected) {
-    setStatusKey(location.protocol === "file:" ? "openFromServer" : "connectionLost");
+    setStatusKey(location.protocol === "file:" ? "openFromServer" : "connectingServer");
+    showToast("error", t("connectingServer"));
     trackEvent("share_blocked", { reason: "socket_unavailable" });
     return;
   }
 
   try {
     shareButton.disabled = true;
+    if (!(await saveShareProtectionSettings())) {
+      shareButton.disabled = false;
+      return;
+    }
     setStatusKey("chooseScreen");
     if (currentUser?.username) {
       roomId = currentUser.username;
@@ -659,20 +900,21 @@ async function startSharing() {
     video.srcObject = null;
     video.classList.remove("is-playing");
     resetScreenAspectRatio();
-    emptyState.classList.remove("hidden");
-    setEmptyTitle("live");
-    setEmptyHint("emptyHostLive");
     stopButton.classList.remove("hidden");
     shareButton.querySelector("span").textContent = t("sharingButton");
+    updateSurfaceVisibility();
     socket.send(JSON.stringify({ type: "host-room", roomId, profile: socketProfile() }));
+    showToast("success", t("shareStartedToast"));
 
     localStream.getVideoTracks()[0]?.addEventListener("ended", stopSharing);
   } catch (error) {
     shareButton.disabled = false;
     if (error.name === "NotAllowedError") {
       setStatusKey("permissionDenied");
+      showToast("error", t("permissionDenied"));
     } else {
       setStatusKey("cannotStart");
+      showToast("error", t("cannotStart"));
     }
     console.error("Screen share failed", error);
     trackEvent("share_failed", { name: error.name, message: error.message });
@@ -705,9 +947,6 @@ function attachCaptureTrackEvents(track) {
 function handleVisibilityChange() {
   if (!localStream || role !== "host") return;
   debugLog("page:visibility", { state: document.visibilityState });
-  if (document.visibilityState === "hidden") {
-    setStageSubtitle(t("emptyHostLive"));
-  }
 }
 
 function ensureSocketReady() {
@@ -777,6 +1016,8 @@ function stopSharing() {
   clearTrial();
   setStageSubtitle("");
   setStatusKey("ended");
+  showToast("success", t("shareStoppedToast"));
+  updateSurfaceVisibility();
   trackEvent("share_stopped");
 }
 
@@ -1317,9 +1558,11 @@ async function flushPendingCandidates(peerId, peer) {
 }
 
 function showRoomLink() {
-  shareLink.value = currentUser?.username
-    ? new URL(`/@${currentUser.username}`, window.location.origin).toString()
-    : legacyWatchUrl(roomId).toString();
+  const url = currentUser?.username ? new URL(`/@${currentUser.username}`, window.location.origin) : legacyWatchUrl(roomId);
+  if (currentUser?.roomPasswordEnabled && currentUser?.roomPasswordShareToken) {
+    url.searchParams.set("password", currentUser.roomPasswordShareToken);
+  }
+  shareLink.value = url.toString();
   linkBox.classList.remove("hidden");
   copyRoomLink();
 }
@@ -1335,9 +1578,11 @@ async function copyRoomLink() {
   try {
     await navigator.clipboard.writeText(shareLink.value);
     if (role === "host") setStatusKey("copied");
+    showToast("success", t("linkCopiedToast"));
     trackEvent("link_copied");
   } catch {
     document.execCommand("copy");
+    showToast("success", t("linkCopiedToast"));
   }
 }
 
@@ -1441,14 +1686,47 @@ function setEmptyTitle(key) {
   emptyTitle.textContent = t(key);
 }
 
+function updateSurfaceVisibility() {
+  const isViewer = role === "viewer";
+  const isLiveHost = role === "host" && Boolean(localStream);
+
+  if (isViewer) {
+    if (stage && !stage.isConnected) {
+      studio?.appendChild(stage);
+    }
+    stage?.classList.remove("surface-hidden");
+  } else {
+    stage?.remove();
+  }
+
+  studioHero?.classList.toggle("hidden", isViewer);
+  accountCta?.classList.toggle("hidden", isViewer);
+  presenterPanel?.classList.toggle("hidden", isViewer);
+  presenterLiveStatus?.classList.toggle("is-live", isLiveHost);
+
+  if (presenterStatusTitle) {
+    presenterStatusTitle.textContent = t(isLiveHost ? "presenterLiveTitle" : "presenterReadyTitle");
+  }
+  if (presenterStatusText) {
+    presenterStatusText.textContent = t(isLiveHost ? "presenterLiveText" : "presenterReadyText");
+  }
+}
+
 function applyLanguage(nextLanguage) {
+  if (nextLanguage !== "pt" && nextLanguage !== "en") return;
   language = nextLanguage;
   localStorage.setItem("screen2me:language", language);
   document.documentElement.lang = language === "pt" ? "pt-BR" : "en";
   document.querySelector('meta[name="description"]').content = t("pageDescription");
 
-  languageSelect.value = language;
-  languageFlag.textContent = language === "pt" ? "🇧🇷" : "🇺🇸";
+  languageFlag?.classList.toggle("flag-br", language === "pt");
+  languageFlag?.classList.toggle("flag-us", language === "en");
+  if (languageLabel) languageLabel.textContent = language === "pt" ? "Português" : "English";
+  for (const option of languageOptions) {
+    const active = option.dataset.language === language;
+    option.classList.toggle("active", active);
+    option.setAttribute("aria-selected", String(active));
+  }
 
   shareButton.querySelector("span").textContent = shareButton.disabled ? t("sharingButton") : t("share");
   stopButton.querySelector("span").textContent = t("stop");
@@ -1462,6 +1740,16 @@ function applyLanguage(nextLanguage) {
   if (accountCtaEyebrow) accountCtaEyebrow.textContent = t("accountCtaEyebrow");
   if (accountCtaTitle) accountCtaTitle.textContent = t("accountCtaTitle");
   if (accountCtaText) accountCtaText.textContent = t("accountCtaText");
+  if (heroKicker) heroKicker.textContent = t("heroKicker");
+  if (heroTitle) heroTitle.textContent = t("heroTitle");
+  if (heroText) heroText.textContent = t("heroText");
+  if (presenterTipOneTitle) presenterTipOneTitle.textContent = t("presenterTipOneTitle");
+  if (presenterTipOneText) presenterTipOneText.textContent = t("presenterTipOneText");
+  if (presenterTipTwoTitle) presenterTipTwoTitle.textContent = t("presenterTipTwoTitle");
+  if (presenterTipTwoText) presenterTipTwoText.textContent = t("presenterTipTwoText");
+  if (presenterTipThreeTitle) presenterTipThreeTitle.textContent = t("presenterTipThreeTitle");
+  if (presenterTipThreeText) presenterTipThreeText.textContent = t("presenterTipThreeText");
+  updateSurfaceVisibility();
   if (trialLabel) trialLabel.textContent = t("trialLabel");
   if (trialText) trialText.textContent = t("trialText");
   if (trialAccountLink) trialAccountLink.textContent = t("trialCreateAccount");
@@ -1498,6 +1786,14 @@ function applyLanguage(nextLanguage) {
   if (profileNameLabel) profileNameLabel.textContent = t("name");
   if (profileUsernameLabel) profileUsernameLabel.textContent = t("username");
   if (profileUsernameHint) profileUsernameHint.textContent = t("usernameHint");
+  if (sharePasswordEnabledLabel) sharePasswordEnabledLabel.textContent = t("sharePasswordEnabled");
+  if (sharePasswordLabel) sharePasswordLabel.textContent = t("roomPassword");
+  if (sharePasswordInput) sharePasswordInput.placeholder = t("sharePasswordPlaceholder");
+  if (roomPasswordEyebrow) roomPasswordEyebrow.textContent = t("roomPasswordRequiredEyebrow");
+  if (roomPasswordTitle) roomPasswordTitle.textContent = t("roomPasswordRequiredTitle");
+  if (roomPasswordIntro) roomPasswordIntro.textContent = t("roomPasswordRequiredIntro");
+  if (watchPasswordLabel) watchPasswordLabel.textContent = t("password");
+  if (watchPasswordButton) watchPasswordButton.textContent = t("roomPasswordSubmit");
   if (registerButton) registerButton.textContent = t("signIn");
   if (loginButton) loginButton.textContent = t("login");
   if (profileButton) profileButton.textContent = t("profileSave");
@@ -1507,7 +1803,7 @@ function applyLanguage(nextLanguage) {
   quickCard.setAttribute("aria-label", t("controlLabel"));
   linkBox.setAttribute("aria-label", t("linkRoomLabel"));
   statsBox.setAttribute("aria-label", t("statsLabel"));
-  document.querySelector(".stage").setAttribute("aria-label", t("stageLabel"));
+  stage?.setAttribute("aria-label", t("stageLabel"));
   copyButton.setAttribute("aria-label", t("copyLink"));
   copyButton.title = t("copyLink");
 
@@ -1532,6 +1828,79 @@ function getInitialLanguage() {
 
 function t(key) {
   return translations[language][key];
+}
+
+function toggleLanguageMenu() {
+  const willOpen = languageMenu?.classList.contains("hidden");
+  languageMenu?.classList.toggle("hidden", !willOpen);
+  languageButton?.setAttribute("aria-expanded", String(Boolean(willOpen)));
+}
+
+function closeLanguageMenu() {
+  languageMenu?.classList.add("hidden");
+  languageButton?.setAttribute("aria-expanded", "false");
+}
+
+function showToast(type, message, detail = "") {
+  if (!toastStack || !message) return;
+  const toast = document.createElement("div");
+  toast.className = `toast ${type === "error" ? "error" : "success"}`;
+  toast.innerHTML = `<strong>${escapeHtml(type === "error" ? t("actionError") : t("actionSuccess"))}</strong><span>${escapeHtml(message)}</span>${
+    detail ? `<span>${escapeHtml(detail)}</span>` : ""
+  }`;
+  toastStack.appendChild(toast);
+  window.setTimeout(() => toast.remove(), 4200);
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  })[char]);
+}
+
+async function encryptSecret(value) {
+  if (!value) return "";
+  if (!window.crypto?.subtle) throw new Error("WebCrypto unavailable");
+  const key = await getClientCryptoKey();
+  const encrypted = await window.crypto.subtle.encrypt(
+    { name: "RSA-OAEP" },
+    key,
+    new TextEncoder().encode(value)
+  );
+  return {
+    encrypted: "rsa-oaep-v1",
+    value: base64UrlEncode(new Uint8Array(encrypted))
+  };
+}
+
+async function getClientCryptoKey() {
+  if (!clientCryptoKeyPromise) {
+    clientCryptoKeyPromise = fetch("/api/auth/crypto-key", { credentials: "same-origin" })
+      .then((response) => {
+        if (!response.ok) throw new Error("Could not load crypto key");
+        return response.json();
+      })
+      .then((data) =>
+        window.crypto.subtle.importKey(
+          "jwk",
+          data.key,
+          { name: "RSA-OAEP", hash: "SHA-256" },
+          false,
+          ["encrypt"]
+        )
+      );
+  }
+  return clientCryptoKeyPromise;
+}
+
+function base64UrlEncode(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 function format(key, values) {
@@ -1633,9 +2002,10 @@ async function loadSession() {
     const response = await fetch("/api/auth/me", { credentials: "same-origin" });
     if (!response.ok) return;
     const data = await response.json();
-    if (data.user) {
+  if (data.user) {
       currentUser = data.user;
       updateAccountUi();
+      updateShareProtectionUi();
       if (!authView?.classList.contains("hidden")) {
         setAuthMode("profile");
       }
@@ -1647,38 +2017,53 @@ async function loadSession() {
 
 async function registerAccount(event) {
   event.preventDefault();
-  const payload = {
-    name: registerNameInput?.value || "",
-    username: usernameInput?.value || "",
-    email: registerEmailInput?.value || "",
-    password: registerPasswordInput?.value || "",
-    language
-  };
+  try {
+    const payload = {
+      name: registerNameInput?.value || "",
+      username: cleanUsernameInput(usernameInput?.value || ""),
+      email: registerEmailInput?.value || "",
+      password: await encryptSecret(registerPasswordInput?.value || ""),
+      language
+    };
 
-  await submitAuth("/api/auth/register", payload, "authSuccess");
+    await submitAuth("/api/auth/register", payload, "authSuccess");
+  } catch {
+    setAuthMessage(t("authError"));
+    showToast("error", t("authError"));
+  }
 }
 
 async function loginAccount(event) {
   event.preventDefault();
-  const payload = {
-    email: loginEmailInput?.value || "",
-    password: loginPasswordInput?.value || ""
-  };
+  try {
+    const payload = {
+      email: loginEmailInput?.value || "",
+      password: await encryptSecret(loginPasswordInput?.value || "")
+    };
 
-  await submitAuth("/api/auth/login", payload, "authLoginSuccess");
+    await submitAuth("/api/auth/login", payload, "authLoginSuccess");
+  } catch {
+    setAuthMessage(t("authError"));
+    showToast("error", t("authError"));
+  }
 }
 
 async function updateProfile(event) {
   event.preventDefault();
-  await submitAuth(
-    "/api/auth/profile",
-    {
-      name: profileNameInput?.value || "",
-      username: profileUsernameInput?.value || ""
-    },
-    "profileSuccess",
-    false
-  );
+  try {
+    await submitAuth(
+      "/api/auth/profile",
+      {
+        name: profileNameInput?.value || "",
+        username: cleanUsernameInput(profileUsernameInput?.value || "")
+      },
+      "profileSuccess",
+      false
+    );
+  } catch {
+    setAuthMessage(t("authError"));
+    showToast("error", t("authError"));
+  }
 }
 
 async function logoutAccount() {
@@ -1690,15 +2075,19 @@ async function logoutAccount() {
     });
     if (!response.ok) {
       setAuthMessage(t("authError"));
+      showToast("error", t("authError"));
       return;
     }
     currentUser = null;
     updateAccountUi();
+    updateShareProtectionUi();
     setAuthMessage(t("logoutSuccess"));
+    showToast("success", t("logoutToast"));
     trackEvent("user_logged_out");
     window.setTimeout(closeAuthModal, 450);
   } catch {
     setAuthMessage(t("authError"));
+    showToast("error", t("authError"));
   }
 }
 
@@ -1714,11 +2103,14 @@ async function submitAuth(url, payload, successKey, closeOnSuccess = true) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       setAuthMessage(data.message || t("authError"));
+      showToast("error", data.message || t("authError"));
       return;
     }
     currentUser = data.user;
     updateAccountUi();
+    updateShareProtectionUi();
     setAuthMessage(t(successKey));
+    showToast("success", toastMessageForAuth(url));
     trackEvent(authEventName(url));
     if (closeOnSuccess) {
       window.setTimeout(() => {
@@ -1727,6 +2119,7 @@ async function submitAuth(url, payload, successKey, closeOnSuccess = true) {
     }
   } catch {
     setAuthMessage(t("authError"));
+    showToast("error", t("authError"));
   }
 }
 
@@ -1737,12 +2130,36 @@ function authEventName(url) {
   return "auth_updated";
 }
 
+function cleanUsernameInput(value) {
+  return String(value).trim().replace(/^@+/, "").toLowerCase();
+}
+
+function toastMessageForAuth(url) {
+  if (url.endsWith("/register")) return t("registerToast");
+  if (url.endsWith("/login")) return t("loginToast");
+  if (url.endsWith("/profile")) return t("profileToast");
+  return t("actionSuccess");
+}
+
 function updateAccountUi() {
   const displayName = displayCurrentUser();
   if (!accountName || !accountButton) return;
-  accountName.textContent = displayName;
-  accountButton.title = currentUser ? t("manage") : t("signIn");
-  if (accountLabel) accountLabel.textContent = currentUser ? t("account") : t("session");
+  accountName.textContent = currentUser ? displayName : t("login");
+  accountButton.title = currentUser ? t("manage") : t("login");
+  accountButton.classList.toggle("is-authenticated", Boolean(currentUser));
+  accountLabel?.classList.toggle("hidden", !currentUser);
+  if (accountLabel) accountLabel.textContent = t("account");
+}
+
+function updateShareProtectionUi() {
+  roomProtectionCard?.classList.toggle("hidden", !currentUser || role === "viewer");
+  if (sharePasswordEnabledInput) sharePasswordEnabledInput.checked = Boolean(currentUser?.roomPasswordEnabled);
+  if (sharePasswordInput) sharePasswordInput.value = "";
+  updateSharePasswordField();
+}
+
+function updateSharePasswordField() {
+  sharePasswordField?.classList.toggle("hidden", !sharePasswordEnabledInput?.checked);
 }
 
 function displayCurrentUser() {
@@ -1805,7 +2222,7 @@ function setAuthMode(mode) {
     if (authTitle) authTitle.textContent = t("profileTitle");
     if (authIntro) authIntro.textContent = t("profileIntro");
     if (profileNameInput) profileNameInput.value = currentUser?.name || "";
-    if (profileUsernameInput) profileUsernameInput.value = currentUser?.username ? `@${currentUser.username}` : "";
+    if (profileUsernameInput) profileUsernameInput.value = currentUser?.username || "";
   } else {
     if (authTitle) authTitle.textContent = t("authTitle");
     if (authIntro) authIntro.textContent = t("authIntro");

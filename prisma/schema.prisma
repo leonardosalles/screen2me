@@ -14,13 +14,38 @@ model User {
   name         String?
   email        String?       @unique
   passwordHash String?       @map("password_hash")
+  roomPasswordEnabled Boolean @default(false) @map("room_password_enabled")
+  roomPasswordHash String?    @map("room_password_hash")
   language     String?
   firstSeenAt  DateTime      @default(now()) @map("first_seen_at")
   lastSeenAt   DateTime      @updatedAt @map("last_seen_at")
   events       UserEvent[]
   streamUsages StreamUsage[]
+  liveStreams  LiveStream[]
 
   @@map("users")
+}
+
+model LiveStream {
+  id              BigInt    @id @default(autoincrement())
+  userId          String?   @map("user_id") @db.Uuid
+  sessionId       String    @map("session_id")
+  roomId          String    @map("room_id")
+  hostUsername    String?   @map("host_username")
+  hostDisplayName String?   @map("host_display_name")
+  startedAt       DateTime  @default(now()) @map("started_at")
+  endedAt         DateTime? @map("ended_at")
+  endedReason     String?   @map("ended_reason")
+  durationSeconds Int       @default(0) @map("duration_seconds")
+  viewerCount     Int       @default(0) @map("viewer_count")
+  viewerPeak      Int       @default(0) @map("viewer_peak")
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([endedAt])
+  @@index([roomId])
+  @@index([sessionId])
+  @@index([startedAt])
+  @@map("live_streams")
 }
 
 model StreamUsage {

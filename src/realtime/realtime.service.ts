@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type { Server as HttpServer } from "node:http";
 import { RawData, WebSocket, WebSocketServer } from "ws";
+import { AuthService } from "../auth/auth.service";
 import { PrismaService } from "../prisma.service";
 
 const SESSION_COOKIE = "screen2me_sid";
@@ -23,6 +24,7 @@ type Client = WebSocket & {
   user: ClientUser | null;
   usageId: bigint | null;
   usageStartedAt: number | null;
+  liveStreamId: bigint | null;
   trialTimer: NodeJS.Timeout | null;
   trialEndsAt: number | null;
 };
@@ -39,17 +41,22 @@ export class RealtimeService implements OnModuleDestroy {
   private readonly memoryAnonymousUsage = new Map<string, number>();
   private server: WebSocketServer | null = null;
 
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AuthService) private readonly auth: AuthService
+  ) {}
 
   bind(httpServer: HttpServer) {
     if (this.server) return;
 
     this.server = new WebSocketServer({ server: httpServer });
     this.server.on("connection", (socket, request) => this.handleConnection(socket as Client, request));
+    void this.closeOpenLiveStreams("server_restart");
     this.logger.log("WebSocket signaling server attached");
   }
 
-  onModuleDestroy() {
+  async onModuleDestroy() {
+    await this.closeOpenLiveStreams("server_shutdown");
     this.server?.close();
   }
 
@@ -61,6 +68,7 @@ export class RealtimeService implements OnModuleDestroy {
     socket.user = await this.findUser(socket.sessionId);
     socket.usageId = null;
     socket.usageStartedAt = null;
+    socket.liveStreamId = null;
     socket.trialTimer = null;
     socket.trialEndsAt = null;
 
@@ -89,7 +97,7 @@ export class RealtimeService implements OnModuleDestroy {
 
     if (message.type === "join-room") {
       this.applyClientProfile(socket, message.profile);
-      await this.joinRoom(socket, message.roomId);
+      await this.joinRoom(socket, message.roomId, message.password);
       return;
     }
 
@@ -129,6 +137,7 @@ export class RealtimeService implements OnModuleDestroy {
       socket.roomId = null;
       return;
     }
+    await this.startLiveStream(socket, roomId);
 
     const room = existing || { host: null, viewers: new Set<Client>() };
     room.host = socket;
@@ -159,11 +168,21 @@ export class RealtimeService implements OnModuleDestroy {
       trial: this.trialPayload(socket)
     });
     this.broadcastAudience(room);
+    this.syncLiveViewerCount(room);
   }
 
-  private async joinRoom(socket: Client, roomId?: string) {
+  private async joinRoom(socket: Client, roomId?: string, password?: unknown) {
     if (!roomId) {
       this.send(socket, { type: "room-error", message: "Link sem sala." });
+      return;
+    }
+
+    if (!(await this.canJoinRoom(roomId, password))) {
+      this.send(socket, {
+        type: "room-password-required",
+        roomId,
+        invalid: typeof password === "string" && password.length > 0
+      });
       return;
     }
 
@@ -196,9 +215,11 @@ export class RealtimeService implements OnModuleDestroy {
       this.send(room.host, { type: "viewer-ready", viewerId: socket.id, viewer: this.publicUser(socket) });
     }
     this.broadcastAudience(room);
+    this.syncLiveViewerCount(room);
   }
 
   private leaveRoom(socket: Client) {
+    const previousRoomId = socket.roomId;
     this.endUsage(socket);
     if (socket.trialTimer) {
       clearTimeout(socket.trialTimer);
@@ -211,6 +232,7 @@ export class RealtimeService implements OnModuleDestroy {
     if (!room) return;
 
     if (socket.role === "host" && room.host === socket) {
+      this.endLiveStream(socket, room.viewers.size, "host_left");
       room.host = null;
       for (const viewer of room.viewers) {
         this.pauseUsage(viewer);
@@ -224,10 +246,11 @@ export class RealtimeService implements OnModuleDestroy {
         this.send(room.host, { type: "viewer-left", viewerId: socket.id });
       }
       this.broadcastAudience(room);
+      this.syncLiveViewerCount(room);
     }
 
-    if (!room.host && room.viewers.size === 0) {
-      this.rooms.delete(socket.roomId);
+    if (!room.host && room.viewers.size === 0 && previousRoomId) {
+      this.rooms.delete(previousRoomId);
     }
 
     socket.roomId = null;
@@ -301,6 +324,98 @@ export class RealtimeService implements OnModuleDestroy {
       socket.trialTimer = null;
     }
     socket.trialEndsAt = null;
+  }
+
+  private async startLiveStream(socket: Client, roomId: string) {
+    socket.liveStreamId = null;
+    if (!this.prisma.enabled) return;
+
+    const host = this.publicUser(socket);
+    try {
+      const liveStream = await this.prisma.liveStream.create({
+        data: {
+          userId: socket.user?.id || null,
+          sessionId: socket.sessionId,
+          roomId,
+          hostUsername: socket.user?.username || null,
+          hostDisplayName: host?.displayName || socket.user?.name || socket.user?.email || null
+        },
+        select: { id: true }
+      });
+      socket.liveStreamId = liveStream.id;
+    } catch (error: any) {
+      this.logger.warn(`Could not create live stream: ${error.message}`);
+    }
+  }
+
+  private syncLiveViewerCount(room: Room) {
+    const liveStreamId = room.host?.liveStreamId;
+    if (!liveStreamId || !this.prisma.enabled) return;
+
+    const viewerCount = room.viewers.size;
+    this.prisma.liveStream
+      .findUnique({ where: { id: liveStreamId }, select: { viewerPeak: true } })
+      .then((liveStream) => {
+        if (!liveStream) return null;
+        return this.prisma.liveStream.update({
+          where: { id: liveStreamId },
+          data: {
+            viewerCount,
+            viewerPeak: Math.max(liveStream.viewerPeak, viewerCount)
+          }
+        });
+      })
+      .catch((error) => this.logger.warn(`Could not update live stream viewers: ${error.message}`));
+  }
+
+  private endLiveStream(socket: Client, viewerCount: number, reason: string) {
+    const liveStreamId = socket.liveStreamId;
+    socket.liveStreamId = null;
+    if (!liveStreamId || !this.prisma.enabled) return;
+
+    this.prisma.liveStream
+      .findUnique({ where: { id: liveStreamId }, select: { startedAt: true, viewerPeak: true } })
+      .then((liveStream) => {
+        if (!liveStream) return null;
+        const durationSeconds = Math.max(0, Math.round((Date.now() - liveStream.startedAt.getTime()) / 1000));
+        return this.prisma.liveStream.update({
+          where: { id: liveStreamId },
+          data: {
+            endedAt: new Date(),
+            endedReason: reason,
+            durationSeconds,
+            viewerCount,
+            viewerPeak: Math.max(liveStream.viewerPeak, viewerCount)
+          }
+        });
+      })
+      .catch((error) => this.logger.warn(`Could not end live stream: ${error.message}`));
+  }
+
+  private async closeOpenLiveStreams(reason: string) {
+    if (!this.prisma.enabled) return;
+
+    try {
+      const activeStreams = await this.prisma.liveStream.findMany({
+        where: { endedAt: null },
+        select: { id: true, startedAt: true }
+      });
+      const now = new Date();
+      await Promise.all(
+        activeStreams.map((stream) =>
+          this.prisma.liveStream.update({
+            where: { id: stream.id },
+            data: {
+              endedAt: now,
+              endedReason: reason,
+              durationSeconds: Math.max(0, Math.round((now.getTime() - stream.startedAt.getTime()) / 1000))
+            }
+          })
+        )
+      );
+    } catch (error: any) {
+      this.logger.warn(`Could not close stale live streams: ${error.message}`);
+    }
   }
 
   private async ensureViewerUsage(socket: Client, roomId: string) {
@@ -409,6 +524,10 @@ export class RealtimeService implements OnModuleDestroy {
         select: { id: true, username: true, name: true, email: true }
       })
       .catch(() => null);
+  }
+
+  private async canJoinRoom(roomId: string, password: unknown) {
+    return this.auth.verifyRoomPassword(roomId, password);
   }
 
   private applyClientProfile(socket: Client, profile: unknown) {

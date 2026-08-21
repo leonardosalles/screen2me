@@ -58,6 +58,58 @@ export class TrackingService {
     });
   }
 
+  async liveStreamsSummary() {
+    if (!this.prisma.enabled) {
+      return {
+        persistence: false,
+        activeCount: 0,
+        activeStreams: [],
+        recentStreams: []
+      };
+    }
+
+    const [activeCount, activeStreams, recentStreams] = await Promise.all([
+      this.prisma.liveStream.count({ where: { endedAt: null } }),
+      this.prisma.liveStream.findMany({
+        where: { endedAt: null },
+        orderBy: { startedAt: "desc" },
+        take: 25,
+        select: {
+          id: true,
+          roomId: true,
+          hostUsername: true,
+          hostDisplayName: true,
+          startedAt: true,
+          viewerCount: true,
+          viewerPeak: true
+        }
+      }),
+      this.prisma.liveStream.findMany({
+        orderBy: { startedAt: "desc" },
+        take: 25,
+        select: {
+          id: true,
+          roomId: true,
+          hostUsername: true,
+          hostDisplayName: true,
+          startedAt: true,
+          endedAt: true,
+          endedReason: true,
+          durationSeconds: true,
+          viewerCount: true,
+          viewerPeak: true
+        }
+      })
+    ]);
+
+    return {
+      persistence: true,
+      activeCount,
+      activeStreams: activeStreams.map((stream) => ({ ...stream, id: stream.id.toString() })),
+      recentStreams: recentStreams.map((stream) => ({ ...stream, id: stream.id.toString() }))
+    };
+  }
+
   private object(input: unknown): Record<string, any> {
     return input && typeof input === "object" && !Array.isArray(input) ? (input as Record<string, any>) : {};
   }

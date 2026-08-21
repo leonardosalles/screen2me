@@ -23,8 +23,10 @@
       function gtag() {
         dataLayer.push(arguments);
       }
+      const analyticsLocation = new URL(window.location.href);
+      analyticsLocation.searchParams.delete("password");
       gtag("js", new Date());
-      gtag("config", "G-KS5RYKNQB8");
+      gtag("config", "G-KS5RYKNQB8", { page_location: analyticsLocation.toString() });
     </script>
   </head>
   <body>
@@ -40,27 +42,140 @@
       </a>
 
       <div class="nav-actions">
-        <label class="language-select" aria-label="Language">
-          <span id="languageFlag" aria-hidden="true">🇺🇸</span>
-          <select id="languageSelect">
-            <option value="en">English</option>
-            <option value="pt">Português</option>
-          </select>
-        </label>
+        <div id="languagePicker" class="language-picker">
+          <button id="languageButton" class="language-button" type="button" aria-haspopup="listbox" aria-expanded="false">
+            <span id="languageFlag" class="flag-icon" aria-hidden="true"></span>
+            <span id="languageLabel">English</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m6 9 6 6 6-6"></path>
+            </svg>
+          </button>
+          <div id="languageMenu" class="language-menu hidden" role="listbox" aria-label="Language">
+            <button class="language-option" type="button" data-language="en" role="option">
+              <span class="flag-icon flag-us" aria-hidden="true"></span>
+              <span>English</span>
+            </button>
+            <button class="language-option" type="button" data-language="pt" role="option">
+              <span class="flag-icon flag-br" aria-hidden="true"></span>
+              <span>Português</span>
+            </button>
+          </div>
+        </div>
 
         <button id="accountButton" class="nav-account" type="button">
-          <span id="accountLabel">Session</span>
-          <strong id="accountName">Guest</strong>
+          <span id="accountLabel" class="hidden">Account</span>
+          <strong id="accountName">Login</strong>
         </button>
       </div>
     </header>
 
     <main class="shell">
+      <section class="studio">
+        <section id="studioHero" class="studio-hero" aria-label="Product summary">
+          <div class="hero-copy">
+            <span class="product-kicker" id="heroKicker">Browser screen sharing</span>
+            <h1 id="heroTitle">Share before the call gets cold.</h1>
+            <p id="heroText">Open a room, start broadcasting, and send one clean link.</p>
+          </div>
+        </section>
+
+        <section id="accountCta" class="account-cta" aria-label="Account benefits">
+          <span id="accountCtaEyebrow">Free account</span>
+          <strong id="accountCtaTitle">Share without losing context</strong>
+          <p id="accountCtaText">Save room history, reserve an @username, and use your fixed /@username link. The app stays free.</p>
+        </section>
+
+        <section id="presenterPanel" class="presenter-panel" aria-label="Presenter guide">
+          <div id="presenterLiveStatus" class="presenter-status">
+            <span class="presenter-dot" aria-hidden="true"></span>
+            <div>
+              <strong id="presenterStatusTitle">Ready when you are</strong>
+              <p id="presenterStatusText">Use the cockpit on the right to start sharing, then send the link to your group.</p>
+            </div>
+          </div>
+
+          <div class="presenter-grid">
+            <article>
+              <span>01</span>
+              <strong id="presenterTipOneTitle">Choose the safest source</strong>
+              <p id="presenterTipOneText">Share the entire screen or a specific window for the most stable capture.</p>
+            </article>
+            <article>
+              <span>02</span>
+              <strong id="presenterTipTwoTitle">Send one clean link</strong>
+              <p id="presenterTipTwoText">Logged-in users can share their fixed /@username link every time.</p>
+            </article>
+            <article>
+              <span>03</span>
+              <strong id="presenterTipThreeTitle">Keep this tab open</strong>
+              <p id="presenterTipThreeText">The browser tab coordinates the room while your screen is live.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="stage surface-hidden" aria-label="Stream preview">
+          <div class="topbar">
+            <div>
+              <span id="stageTitle">Your screen appears here</span>
+              <small id="stageSubtitle"></small>
+            </div>
+            <div class="stage-actions">
+              <span id="connectionBadge">local</span>
+              <button id="fullscreenButton" class="ghost-button" type="button" aria-label="Fullscreen" title="Fullscreen">
+                <svg class="enter-fullscreen" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
+                  <path d="M16 3h3a2 2 0 0 1 2 2v3"></path>
+                  <path d="M8 21H5a2 2 0 0 1-2-2v-3"></path>
+                  <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
+                </svg>
+                <svg class="exit-fullscreen hidden" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M8 3v3a2 2 0 0 1-2 2H3"></path>
+                  <path d="M16 3v3a2 2 0 0 0 2 2h3"></path>
+                  <path d="M8 21v-3a2 2 0 0 0-2-2H3"></path>
+                  <path d="M16 21v-3a2 2 0 0 1 2-2h3"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="screen-frame">
+            <video id="video" autoplay playsinline muted></video>
+            <div id="emptyState" class="empty-state">
+              <div class="empty-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <rect x="3" y="5" width="18" height="12" rx="2"></rect>
+                  <path d="M9 21h6"></path>
+                  <path d="M12 17v4"></path>
+                </svg>
+              </div>
+              <strong id="emptyTitle">One click and the link is ready</strong>
+              <span id="emptyHint">Choose a screen, window, or tab to start.</span>
+            </div>
+          </div>
+        </section>
+      </section>
+
       <aside class="control">
+        <div class="control-heading">
+          <span>Broadcast cockpit</span>
+          <strong>Go live fast</strong>
+        </div>
+
         <section id="quickCard" class="quick-card" aria-label="Broadcast controls">
           <div class="live-row">
             <span id="liveDot" class="live-dot"></span>
             <span id="modeLabel">Standby</span>
+          </div>
+
+          <div id="roomProtectionCard" class="room-protection hidden">
+            <label class="check-row compact">
+              <input id="sharePasswordEnabledInput" type="checkbox" />
+              <span id="sharePasswordEnabledLabel">Protect with password</span>
+            </label>
+            <label id="sharePasswordField" class="hidden">
+              <span id="sharePasswordLabel">Room password</span>
+              <input id="sharePasswordInput" type="password" placeholder="Optional room password" />
+            </label>
           </div>
 
           <button id="shareButton" class="primary action-button" type="button">
@@ -78,12 +193,6 @@
             </svg>
             <span>Stop</span>
           </button>
-        </section>
-
-        <section id="accountCta" class="account-cta" aria-label="Account benefits">
-          <span id="accountCtaEyebrow">Free account</span>
-          <strong id="accountCtaTitle">Share without losing context</strong>
-          <p id="accountCtaText">Save room history, reserve an @username, and use your fixed /@username link. The app stays free.</p>
         </section>
 
         <section id="trialPanel" class="trial-panel hidden" aria-label="Trial limit">
@@ -130,47 +239,6 @@
           <span id="madeByNote">Made with ♥️ by <a href="https://leonardosalles.com" target="_blank" rel="noreferrer">Leonardo Salles</a></span>
         </footer>
       </aside>
-
-      <section class="stage" aria-label="Stream preview">
-        <div class="topbar">
-          <div>
-            <span id="stageTitle">Your screen appears here</span>
-            <small id="stageSubtitle"></small>
-          </div>
-          <div class="stage-actions">
-            <span id="connectionBadge">local</span>
-            <button id="fullscreenButton" class="ghost-button" type="button" aria-label="Fullscreen" title="Fullscreen">
-              <svg class="enter-fullscreen" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
-                <path d="M16 3h3a2 2 0 0 1 2 2v3"></path>
-                <path d="M8 21H5a2 2 0 0 1-2-2v-3"></path>
-                <path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
-              </svg>
-              <svg class="exit-fullscreen hidden" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M8 3v3a2 2 0 0 1-2 2H3"></path>
-                <path d="M16 3v3a2 2 0 0 0 2 2h3"></path>
-                <path d="M8 21v-3a2 2 0 0 0-2-2H3"></path>
-                <path d="M16 21v-3a2 2 0 0 1 2-2h3"></path>
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div class="screen-frame">
-          <video id="video" autoplay playsinline muted></video>
-          <div id="emptyState" class="empty-state">
-            <div class="empty-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <rect x="3" y="5" width="18" height="12" rx="2"></rect>
-                <path d="M9 21h6"></path>
-                <path d="M12 17v4"></path>
-              </svg>
-            </div>
-            <strong id="emptyTitle">One click and the link is ready</strong>
-            <span id="emptyHint">Choose a screen, window, or tab to start.</span>
-          </div>
-        </div>
-      </section>
     </main>
 
     <div id="howToModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="howToTitle">
@@ -255,8 +323,8 @@
             </label>
             <label>
               <span id="usernameLabel">Username</span>
-              <input id="usernameInput" autocomplete="username" placeholder="@leonardo" required />
-              <small id="usernameHint">Use letters, numbers, or underscores. Ex: @alex</small>
+              <input id="usernameInput" autocomplete="username" placeholder="leonardo" required />
+              <small id="usernameHint">Use letters, numbers, or underscores. Ex: alex</small>
             </label>
           </div>
           <label>
@@ -289,8 +357,8 @@
           </label>
           <label>
             <span id="profileUsernameLabel">Username</span>
-            <input id="profileUsernameInput" autocomplete="username" placeholder="@leonardo" required />
-            <small id="profileUsernameHint">Use letters, numbers, or underscores. Ex: @alex</small>
+            <input id="profileUsernameInput" autocomplete="username" placeholder="leonardo" required />
+            <small id="profileUsernameHint">Use letters, numbers, or underscores. Ex: alex</small>
           </label>
           <button id="profileButton" class="primary modal-primary" type="submit">Save profile</button>
           <button id="logoutButton" class="danger modal-primary" type="button">Logout</button>
@@ -299,6 +367,22 @@
         <p id="authMessage" class="auth-message" role="status"></p>
       </section>
     </div>
+
+    <div id="roomPasswordModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="roomPasswordTitle">
+      <form id="roomPasswordForm" class="modal password-modal">
+        <div class="modal-eyebrow" id="roomPasswordEyebrow">Protected room</div>
+        <h2 id="roomPasswordTitle">Enter the room password</h2>
+        <p id="roomPasswordIntro">This stream is protected by the presenter.</p>
+        <label>
+          <span id="watchPasswordLabel">Password</span>
+          <input id="watchPasswordInput" type="password" autocomplete="current-password" required />
+        </label>
+        <p id="roomPasswordMessage" class="auth-message" role="status"></p>
+        <button id="watchPasswordButton" class="primary modal-primary" type="submit">Watch stream</button>
+      </form>
+    </div>
+
+    <div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
     <script type="module" src="/app.js"></script>
   </body>

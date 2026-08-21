@@ -24,6 +24,11 @@ export class TrackingController {
     return { iceServers: this.iceServers() };
   }
 
+  @Get("live-streams/summary")
+  liveStreamsSummary() {
+    return this.tracking.liveStreamsSummary();
+  }
+
   @Post("events")
   @HttpCode(202)
   async events(@Req() req: Request, @Res({ passthrough: true }) res: Response, @Body() body: unknown) {

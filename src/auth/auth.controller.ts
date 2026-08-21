@@ -17,6 +17,11 @@ export class AuthController {
     return { persistence: this.auth.persistenceEnabled, user };
   }
 
+  @Get("crypto-key")
+  cryptoKey() {
+    return { key: this.auth.clientCryptoKey(), alg: "RSA-OAEP-256" };
+  }
+
   @Get("users/:username")
   async user(@Param("username") username: string) {
     return { user: await this.auth.publicUserByUsername(username || "") };
