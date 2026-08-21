@@ -4,6 +4,11 @@ const copyButton = document.querySelector("#copyButton");
 const shareLink = document.querySelector("#shareLink");
 const linkBox = document.querySelector("#linkBox");
 const video = document.querySelector("#video");
+const mediaControls = document.querySelector("#mediaControls");
+const playPauseButton = document.querySelector("#playPauseButton");
+const muteButton = document.querySelector("#muteButton");
+const volumeSlider = document.querySelector("#volumeSlider");
+const volumeLabel = document.querySelector("#volumeLabel");
 const statusText = document.querySelector("#status");
 const quickCard = document.querySelector("#quickCard");
 const roomLabel = document.querySelector("#roomLabel");
@@ -278,6 +283,12 @@ const translations = {
     logoutToast: "Logout feito.",
     passwordSavedToast: "Senha da sala atualizada.",
     passwordRequiredToast: "Digite a senha antes de compartilhar para gerar o link protegido.",
+    audioUnlockToast: "Clique no video para liberar o audio.",
+    play: "Reproduzir",
+    pause: "Pausar",
+    mute: "Silenciar",
+    unmute: "Ativar som",
+    volume: "Volume",
     skip: "Pular",
     continue: "Continuar"
   },
@@ -420,6 +431,12 @@ const translations = {
     logoutToast: "Logged out.",
     passwordSavedToast: "Room password updated.",
     passwordRequiredToast: "Enter the password before sharing to generate the protected link.",
+    audioUnlockToast: "Click the video to enable audio.",
+    play: "Play",
+    pause: "Pause",
+    mute: "Mute",
+    unmute: "Unmute",
+    volume: "Volume",
     skip: "Skip",
     continue: "Continue"
   }
@@ -451,8 +468,13 @@ let iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
 let frameWatchInterval = null;
 let debugStatsInterval = null;
 let networkBlockedShown = false;
+let lastVolume = Number(localStorage.getItem("screen2me:volume") || "0.8");
 const peers = new Map();
 const pendingCandidates = new Map();
+
+if (!Number.isFinite(lastVolume) || lastVolume < 0 || lastVolume > 1) lastVolume = 0.8;
+video.volume = lastVolume;
+if (volumeSlider) volumeSlider.value = String(Math.round(lastVolume * 100));
 
 applyLanguage(language);
 applyRouteState();
@@ -475,6 +497,9 @@ shareButton.addEventListener("click", startSharing);
 stopButton.addEventListener("click", stopSharing);
 copyButton.addEventListener("click", copyRoomLink);
 fullscreenButton.addEventListener("click", toggleFullscreen);
+playPauseButton?.addEventListener("click", togglePlayback);
+muteButton?.addEventListener("click", toggleMute);
+volumeSlider?.addEventListener("input", handleVolumeInput);
 languageButton?.addEventListener("click", (event) => {
   event.stopPropagation();
   toggleLanguageMenu();
@@ -516,6 +541,7 @@ video.addEventListener("webkitbeginfullscreen", updateFullscreenButton);
 video.addEventListener("webkitendfullscreen", updateFullscreenButton);
 for (const eventName of ["loadstart", "loadedmetadata", "canplay", "playing", "waiting", "stalled", "suspend", "pause", "error", "emptied"]) {
   video.addEventListener(eventName, () => {
+    updateMediaControls();
     debugLog(`video:event:${eventName}`, {
       ...videoSnapshot(),
       error: video.error ? { code: video.error.code, message: video.error.message } : null
@@ -664,6 +690,9 @@ async function connect() {
     if (message.type === "host-left") {
       cleanupPeers();
       video.srcObject = null;
+      video.controls = false;
+      video.muted = true;
+      updateMediaControls();
       video.removeAttribute("src");
       video.classList.remove("is-playing");
       resetScreenAspectRatio();
@@ -810,9 +839,10 @@ async function submitRoomPassword(event) {
 async function saveShareProtectionSettings() {
   if (!currentUser) return true;
   const roomPasswordEnabled = Boolean(sharePasswordEnabledInput?.checked);
-  const roomPasswordValue = sharePasswordInput?.value || "";
-  if (roomPasswordEnabled && !roomPasswordValue && !currentUser.roomPasswordShareToken) {
+  const roomPasswordValue = (sharePasswordInput?.value || "").trim();
+  if (roomPasswordEnabled && !roomPasswordValue) {
     showToast("error", t("passwordRequiredToast"));
+    sharePasswordInput?.focus();
     return false;
   }
 
@@ -879,7 +909,13 @@ async function startSharing() {
         frameRate: { ideal: STREAM_FRAME_RATE, max: STREAM_FRAME_RATE },
         displaySurface: "monitor"
       },
-      audio: false,
+      audio: {
+        systemAudio: "include",
+        windowAudio: "system",
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      },
       selfBrowserSurface: "exclude",
       surfaceSwitching: "include",
       preferCurrentTab: false,
@@ -898,6 +934,9 @@ async function startSharing() {
     trackEvent("share_permission_granted");
 
     video.srcObject = null;
+    video.controls = false;
+    video.muted = true;
+    updateMediaControls();
     video.classList.remove("is-playing");
     resetScreenAspectRatio();
     stopButton.classList.remove("hidden");
@@ -999,6 +1038,9 @@ function stopSharing() {
   cleanupPeers();
   stopFrameWatch();
   video.srcObject = null;
+  video.controls = false;
+  video.muted = true;
+  updateMediaControls();
   video.classList.remove("is-playing");
   resetScreenAspectRatio();
   emptyState.classList.remove("hidden");
@@ -1181,11 +1223,15 @@ async function showRemoteStream(stream, track, peer) {
     streamTracks: stream.getTracks().map(summarizeTrack),
     track: summarizeTrack(track)
   });
+  const hasAudio = stream.getAudioTracks().length > 0;
   video.srcObject = stream;
-  video.muted = true;
+  video.muted = !hasAudio;
+  video.controls = false;
+  video.volume = lastVolume;
   video.autoplay = true;
   video.playsInline = true;
   video.classList.remove("is-playing");
+  updateMediaControls();
   emptyState.classList.remove("hidden");
   setEmptyTitle("emptyViewerTitle");
   setEmptyHint("emptyConnectingVideo");
@@ -1215,7 +1261,82 @@ async function playRemoteVideo() {
   } catch (error) {
     console.error("Remote video play failed", error);
     debugLog("video:play-failed", { name: error.name, message: error.message, ...videoSnapshot() });
+    if (video.srcObject?.getAudioTracks?.().length) {
+      video.muted = true;
+      video.controls = false;
+      updateMediaControls();
+      showToast("error", t("audioUnlockToast"));
+      video.addEventListener(
+        "click",
+        () => {
+          video.muted = false;
+          updateMediaControls();
+          video.play().catch(() => {});
+        },
+        { once: true }
+      );
+    }
     window.setTimeout(() => video.play().catch(() => {}), 350);
+  }
+}
+
+async function togglePlayback() {
+  if (!video.srcObject) return;
+  if (video.paused) {
+    await playRemoteVideo();
+  } else {
+    video.pause();
+  }
+  updateMediaControls();
+}
+
+function toggleMute() {
+  if (!video.srcObject) return;
+  video.muted = !video.muted;
+  if (!video.muted && video.volume === 0) {
+    video.volume = lastVolume || 0.8;
+    if (volumeSlider) volumeSlider.value = String(Math.round(video.volume * 100));
+  }
+  updateMediaControls();
+}
+
+function handleVolumeInput() {
+  const nextVolume = Math.max(0, Math.min(1, Number(volumeSlider?.value || 0) / 100));
+  video.volume = nextVolume;
+  lastVolume = nextVolume;
+  localStorage.setItem("screen2me:volume", String(nextVolume));
+  video.muted = nextVolume === 0;
+  updateMediaControls();
+}
+
+function updateMediaControls() {
+  const hasStream = Boolean(video.srcObject);
+  const hasAudio = Boolean(video.srcObject?.getAudioTracks?.().length);
+  mediaControls?.classList.toggle("hidden", role !== "viewer" || !hasStream);
+  mediaControls?.classList.toggle("has-audio", hasAudio);
+
+  const isPaused = video.paused;
+  playPauseButton?.querySelector(".play-icon")?.classList.toggle("hidden", !isPaused);
+  playPauseButton?.querySelector(".pause-icon")?.classList.toggle("hidden", isPaused);
+  if (playPauseButton) {
+    const label = t(isPaused ? "play" : "pause");
+    playPauseButton.title = label;
+    playPauseButton.setAttribute("aria-label", label);
+  }
+
+  const isMuted = video.muted || video.volume === 0 || !hasAudio;
+  muteButton?.querySelector(".volume-icon")?.classList.toggle("hidden", isMuted);
+  muteButton?.querySelector(".muted-icon")?.classList.toggle("hidden", !isMuted);
+  muteButton?.toggleAttribute("disabled", !hasAudio);
+  volumeSlider?.toggleAttribute("disabled", !hasAudio);
+  if (muteButton) {
+    const label = t(isMuted ? "unmute" : "mute");
+    muteButton.title = label;
+    muteButton.setAttribute("aria-label", label);
+  }
+  if (volumeLabel) volumeLabel.textContent = t("volume");
+  if (volumeSlider && document.activeElement !== volumeSlider) {
+    volumeSlider.value = String(Math.round(video.volume * 100));
   }
 }
 
@@ -1636,6 +1757,9 @@ function handleTrialEnded() {
   } else {
     cleanupPeers();
     video.srcObject = null;
+    video.controls = false;
+    video.muted = true;
+    updateMediaControls();
     video.classList.remove("is-playing");
     resetScreenAspectRatio();
     emptyState.classList.remove("hidden");
@@ -1703,6 +1827,7 @@ function updateSurfaceVisibility() {
   accountCta?.classList.toggle("hidden", isViewer);
   presenterPanel?.classList.toggle("hidden", isViewer);
   presenterLiveStatus?.classList.toggle("is-live", isLiveHost);
+  updateMediaControls();
 
   if (presenterStatusTitle) {
     presenterStatusTitle.textContent = t(isLiveHost ? "presenterLiveTitle" : "presenterReadyTitle");
@@ -1749,6 +1874,7 @@ function applyLanguage(nextLanguage) {
   if (presenterTipTwoText) presenterTipTwoText.textContent = t("presenterTipTwoText");
   if (presenterTipThreeTitle) presenterTipThreeTitle.textContent = t("presenterTipThreeTitle");
   if (presenterTipThreeText) presenterTipThreeText.textContent = t("presenterTipThreeText");
+  updateMediaControls();
   updateSurfaceVisibility();
   if (trialLabel) trialLabel.textContent = t("trialLabel");
   if (trialText) trialText.textContent = t("trialText");
@@ -1978,7 +2104,28 @@ function isFullscreen() {
 
 function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+
+    navigator.serviceWorker
+      .register("/sw.js", { updateViaCache: "none" })
+      .then((registration) => {
+        registration.update().catch(() => {});
+        registration.addEventListener("updatefound", () => {
+          const worker = registration.installing;
+          if (!worker) return;
+          worker.addEventListener("statechange", () => {
+            if (worker.state === "installed" && navigator.serviceWorker.controller) {
+              worker.postMessage({ type: "SKIP_WAITING" });
+            }
+          });
+        });
+      })
+      .catch(() => {});
   }
 }
 

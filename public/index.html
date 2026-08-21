@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#10131a" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <meta
       name="description"
       content="screen2.me creates a fast room to share your screen by link."
@@ -11,7 +14,7 @@
     <title>screen2.me</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=66" />
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-KS5RYKNQB8"></script>
     <script
       async
@@ -140,6 +143,33 @@
 
           <div class="screen-frame">
             <video id="video" autoplay playsinline muted></video>
+            <div id="mediaControls" class="media-controls hidden" aria-label="Playback controls">
+              <button id="playPauseButton" class="media-control-button" type="button" aria-label="Pause" title="Pause">
+                <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M8 5v14"></path>
+                  <path d="M16 5v14"></path>
+                </svg>
+                <svg class="play-icon hidden" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m8 5 11 7-11 7z"></path>
+                </svg>
+              </button>
+              <button id="muteButton" class="media-control-button" type="button" aria-label="Unmute" title="Unmute">
+                <svg class="volume-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M11 5 6 9H3v6h3l5 4z"></path>
+                  <path d="M16 9a5 5 0 0 1 0 6"></path>
+                  <path d="M19 6a9 9 0 0 1 0 12"></path>
+                </svg>
+                <svg class="muted-icon hidden" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M11 5 6 9H3v6h3l5 4z"></path>
+                  <path d="m17 9 4 4"></path>
+                  <path d="m21 9-4 4"></path>
+                </svg>
+              </button>
+              <label class="volume-control">
+                <span id="volumeLabel">Volume</span>
+                <input id="volumeSlider" type="range" min="0" max="100" value="80" />
+              </label>
+            </div>
             <div id="emptyState" class="empty-state">
               <div class="empty-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24">
@@ -384,6 +414,6 @@
 
     <div id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
-    <script type="module" src="/app.js"></script>
+    <script type="module" src="/app.js?v=66"></script>
   </body>
 </html>
