@@ -945,13 +945,6 @@ button:focus-visible,
 
 .screen-frame {
   position: relative;
-  display: grid;
-  place-items: center;
-  flex: 0 1 auto;
-  width: 100%;
-  height: min(750px, calc(100vh - 292px));
-  height: min(750px, calc(100dvh - 292px));
-  aspect-ratio: var(--screen-aspect-ratio, 16 / 9);
   max-height: 750px;
   min-height: 420px;
   overflow: hidden;
@@ -967,12 +960,10 @@ button:focus-visible,
     0 24px 70px rgba(0, 0, 0, 0.32);
 }
 
-video {
-  grid-area: 1 / 1;
-  display: block;
+.screen-frame video {
+  display: flex;
   width: 100%;
   height: 100%;
-  object-fit: contain;
   background: #05070c;
   opacity: 0;
 }
